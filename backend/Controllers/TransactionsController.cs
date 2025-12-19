@@ -28,8 +28,8 @@ public class TransactionsController(
     [HttpPost("upload")]
     [Authorize]
     [Consumes("multipart/form-data")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UploadCnabFile(IFormFile file, CancellationToken cancellationToken)
     {
         var result = await _uploadService.ProcessCnabUploadAsync(file, cancellationToken);
@@ -45,17 +45,46 @@ public class TransactionsController(
     }
 
     /// <summary>
-    /// Retrieves all transactions for a specific CPF ordered by date (most recent first).
+    /// Retrieves transactions for a CPF with pagination, filters and ordering.
     /// </summary>
     /// <param name="cpf">The CPF to filter transactions.</param>
+    /// <param name="page">Page number (starting at 1).</param>
+    /// <param name="pageSize">Items per page.</param>
+    /// <param name="startDate">Filter by start date (inclusive).</param>
+    /// <param name="endDate">Filter by end date (inclusive).</param>
+    /// <param name="types">Comma-separated nature codes to filter (e.g., 1,2,3).</param>
+    /// <param name="sort">Sort direction by date/time: asc or desc (default desc).</param>
     /// <param name="cancellationToken">Token to cancel the request.</param>
-    /// <returns>List of transactions for the specified CPF.</returns>
+    /// <returns>Paged list of transactions.</returns>
     [HttpGet("{cpf}")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<List<Transaction>>> GetTransactionsByCpf(string cpf, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(PagedResult<Transaction>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PagedResult<Transaction>>> GetTransactionsByCpf(
+        string cpf,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] DateTime? startDate = null,
+        [FromQuery] DateTime? endDate = null,
+        [FromQuery] string? types = null,
+        [FromQuery] string sort = "desc",
+        CancellationToken cancellationToken = default)
     {
-        var result = await _transactionService.GetTransactionsByCpfAsync(cpf, cancellationToken);
+        var natureCodes = string.IsNullOrWhiteSpace(types)
+            ? new List<string>()
+            : types.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+        var queryOptions = new TransactionQueryOptions
+        {
+            Cpf = cpf,
+            Page = page,
+            PageSize = pageSize,
+            StartDate = startDate,
+            EndDate = endDate,
+            NatureCodes = natureCodes,
+            SortDirection = sort
+        };
+
+        var result = await _transactionService.GetTransactionsByCpfAsync(queryOptions, cancellationToken);
         
         if (!result.IsSuccess)
             return BadRequest(new { error = result.ErrorMessage });
@@ -70,8 +99,8 @@ public class TransactionsController(
     /// <param name="cancellationToken">Token to cancel the request.</param>
     /// <returns>Object containing the total balance value for that CPF.</returns>
     [HttpGet("{cpf}/balance")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<object>> GetBalance(string cpf, CancellationToken cancellationToken)
     {
         var result = await _transactionService.GetBalanceByCpfAsync(cpf, cancellationToken);
@@ -90,8 +119,8 @@ public class TransactionsController(
     /// <returns>Success message.</returns>
     [HttpDelete]
     [Authorize(Roles = "Admin")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ClearData(CancellationToken cancellationToken)
     {
         var result = await _transactionService.ClearAllDataAsync(cancellationToken);

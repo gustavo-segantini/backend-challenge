@@ -1,0 +1,87 @@
+.login-card {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  border: 1px solid #1e293b;
+}
+
+.login-card__header h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.login-card__header p {
+  margin: 0 0 12px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.login-card__error {
+  background: #7f1d1d;
+  color: #fecdd3;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #fecdd3;
+}
+
+.login-card__session {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.login-card__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-card__label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #cbd5e1;
+}
+
+.login-card__input {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  background: #0b1220;
+  color: #e2e8f0;
+}
+
+.btn {
+  border: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb, #22d3ee);
+  color: #f8fafc;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: #93c5fd;
+  border: 1px dashed #334155;
+}
+
+.btn-secondary {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

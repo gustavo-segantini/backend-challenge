@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import api from '../services/api';
 import './UploadForm.css';
 
-function UploadForm({ onUpload }) {
+function UploadForm({ onUpload, isAuthenticated }) {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -17,6 +17,11 @@ function UploadForm({ onUpload }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    if (!isAuthenticated) {
+      setError('Faça login para enviar.');
+      return;
+    }
 
     if (!file) {
       setError('Please select a file');

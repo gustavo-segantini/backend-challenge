@@ -69,7 +69,7 @@ public class TransactionServiceTests : IDisposable
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Nenhuma transação");
+        result.ErrorMessage.Should().Contain("No transactions were provided");
     }
 
     [Fact]

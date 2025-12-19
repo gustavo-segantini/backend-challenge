@@ -19,7 +19,7 @@ function UploadForm({ onUpload, isAuthenticated }) {
     event.preventDefault();
 
     if (!isAuthenticated) {
-      setError('Faça login para enviar.');
+      setError('Please log in to upload.');
       return;
     }
 

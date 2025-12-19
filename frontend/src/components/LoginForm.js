@@ -17,8 +17,8 @@ function LoginForm({ onLogin, onLogout, isAuthenticated, userInfo, error, onGitH
   return (
     <div className="login-card">
       <div className="login-card__header">
-        <h2>{isAuthenticated ? 'Sessão ativa' : 'Autenticação'}</h2>
-        <p>{isAuthenticated ? 'Token carregado para chamadas protegidas.' : 'Faça login para usar a API protegida.'}</p>
+        <h2>{isAuthenticated ? 'Active Session' : 'Authentication'}</h2>
+        <p>{isAuthenticated ? 'Token loaded for protected API calls.' : 'Please log in to use the protected API.'}</p>
       </div>
 
       {error && <div className="login-card__error">{error}</div>}
@@ -26,19 +26,19 @@ function LoginForm({ onLogin, onLogout, isAuthenticated, userInfo, error, onGitH
       {isAuthenticated ? (
         <div className="login-card__session">
           <div>
-            <strong>Usuário:</strong> {userInfo?.username || 'admin'}
+            <strong>Username:</strong> {userInfo?.username || 'admin'}
           </div>
           <div>
-            <strong>Papel:</strong> {userInfo?.role || 'Admin'}
+            <strong>Role:</strong> {userInfo?.role || 'Admin'}
           </div>
           <button className="btn btn-secondary" onClick={onLogout}>
-            Sair
+            Logout
           </button>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="login-card__form">
           <label className="login-card__label">
-            Usuário
+            Username
             <input
               type="text"
               value={username}
@@ -49,7 +49,7 @@ function LoginForm({ onLogin, onLogout, isAuthenticated, userInfo, error, onGitH
           </label>
 
           <label className="login-card__label">
-            Senha
+            Password
             <input
               type="password"
               value={password}
@@ -60,10 +60,10 @@ function LoginForm({ onLogin, onLogout, isAuthenticated, userInfo, error, onGitH
           </label>
 
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
           <button type="button" className="btn btn-ghost" onClick={onGitHub}>
-            Entrar com GitHub
+            Sign in with GitHub
           </button>
         </form>
       )}

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using CnabApi.Models;
 
@@ -63,7 +60,7 @@ public static class CursorPaginationHelper
     {
         var itemsList = items.ToList();
 
-        if (!itemsList.Any())
+        if (itemsList.Count == 0)
             return new PaginatedResponse<T>
             {
                 Items = itemsList,

@@ -283,7 +283,7 @@ INVALID_LINE_HERE
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Nenhuma transação válida");
+        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
     }
 
     [Fact]
@@ -313,7 +313,7 @@ INVALID_LINE_HERE
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Nenhuma transação válida");
+        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
     }
 
     [Fact]
@@ -327,7 +327,7 @@ INVALID_LINE_HERE
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Nenhuma transação válida");
+        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
     }
 
     [Fact]
@@ -341,7 +341,7 @@ INVALID_LINE_HERE
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Nenhuma transação válida");
+        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
     }
 
     [Fact]
@@ -355,7 +355,7 @@ INVALID_LINE_HERE
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Nenhuma transação válida");
+        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
     }
 
     [Fact]
@@ -369,7 +369,7 @@ INVALID_LINE_HERE
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Nenhuma transação válida");
+        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
     }
 
     [Fact]
@@ -383,7 +383,7 @@ INVALID_LINE_HERE
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Nenhuma transação válida");
+        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
     }
 
     #endregion

@@ -43,7 +43,7 @@ public class FileService : IFileService
         }
         catch (Exception ex)
         {
-            return Result<string>.Failure($"Erro ao ler arquivo: {ex.Message}");
+            return Result<string>.Failure($"Error reading file: {ex.Message}");
         }
     }
 }

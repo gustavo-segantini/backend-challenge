@@ -198,7 +198,7 @@ public class FileServiceTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Erro ao ler arquivo");
+        result.ErrorMessage.Should().Contain("Error reading file");
     }
 
     #endregion

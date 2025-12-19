@@ -175,7 +175,7 @@ public class TransactionsControllerTests
         var cpf = "";
         _transactionServiceMock
             .Setup(x => x.GetTransactionsByCpfAsync(It.IsAny<TransactionQueryOptions>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<PagedResult<Transaction>>.Failure("CPF é obrigatório."));
+            .ReturnsAsync(Result<PagedResult<Transaction>>.Failure("CPF is required."));
 
         // Act
         var result = await _controller.GetTransactionsByCpf(cpf, 1, 50, null, null, null, "desc", CancellationToken.None);
@@ -184,7 +184,7 @@ public class TransactionsControllerTests
         var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
         var value = badRequestResult.Value;
         var errorProperty = value!.GetType().GetProperty("error");
-        errorProperty!.GetValue(value).Should().Be("CPF é obrigatório.");
+        errorProperty!.GetValue(value).Should().Be("CPF is required."); 
     }
 
     [Fact]
@@ -278,7 +278,7 @@ public class TransactionsControllerTests
         var cpf = "";
         _transactionServiceMock
             .Setup(x => x.GetBalanceByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<decimal>.Failure("CPF é obrigatório."));
+            .ReturnsAsync(Result<decimal>.Failure("CPF is required."));
 
         // Act
         var result = await _controller.GetBalance(cpf, CancellationToken.None);
@@ -287,7 +287,7 @@ public class TransactionsControllerTests
         var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
         var value = badRequestResult.Value;
         var errorProperty = value!.GetType().GetProperty("error");
-        errorProperty!.GetValue(value).Should().Be("CPF é obrigatório.");
+        errorProperty!.GetValue(value).Should().Be("CPF is required.");
     }
 
     [Fact]

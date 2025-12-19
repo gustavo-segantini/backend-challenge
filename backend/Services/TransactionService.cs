@@ -29,7 +29,7 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
         try
         {
             if (transactions == null || transactions.Count == 0)
-                return Result<List<Transaction>>.Failure("Nenhuma transação foi fornecida.");
+                return Result<List<Transaction>>.Failure("No transactions were provided.");
 
             _context.Transactions.AddRange(transactions);
             
@@ -46,7 +46,7 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
         }
         catch (Exception ex)
         {
-            return Result<List<Transaction>>.Failure($"Erro ao adicionar transações: {ex.Message}");
+            return Result<List<Transaction>>.Failure($"Error adding transactions: {ex.Message}");
         }
     }
 
@@ -59,10 +59,10 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
         try
         {
             if (string.IsNullOrWhiteSpace(options.Cpf))
-                return Result<PagedResult<Transaction>>.Failure("CPF é obrigatório.");
+                return Result<PagedResult<Transaction>>.Failure("CPF is required.");
 
             if (options.Page <= 0 || options.PageSize <= 0)
-                return Result<PagedResult<Transaction>>.Failure("Parâmetros de paginação inválidos.");
+                return Result<PagedResult<Transaction>>.Failure("Invalid pagination parameters.");
 
             var query = BuildTransactionQuery(options);
 
@@ -85,7 +85,7 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
         }
         catch (Exception ex)
         {
-            return Result<PagedResult<Transaction>>.Failure($"Erro ao obter transações: {ex.Message}");
+            return Result<PagedResult<Transaction>>.Failure($"Error fetching transactions: {ex.Message}");
         }
     }
 
@@ -102,13 +102,13 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
         try
         {
             if (string.IsNullOrWhiteSpace(cpf))
-                return Result<PagedResult<Transaction>>.Failure("CPF é obrigatório.");
+                return Result<PagedResult<Transaction>>.Failure("CPF is required.");
 
             if (string.IsNullOrWhiteSpace(searchTerm))
-                return Result<PagedResult<Transaction>>.Failure("Termo de busca é obrigatório.");
+                return Result<PagedResult<Transaction>>.Failure("Search term is required.");
 
             if (page <= 0 || pageSize <= 0)
-                return Result<PagedResult<Transaction>>.Failure("Parâmetros de paginação inválidos.");
+                return Result<PagedResult<Transaction>>.Failure("Invalid pagination parameters.");
 
             var searchTermLower = searchTerm.ToLower();
 
@@ -140,7 +140,7 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
         }
         catch (Exception ex)
         {
-            return Result<PagedResult<Transaction>>.Failure($"Erro na busca de transações: {ex.Message}");
+            return Result<PagedResult<Transaction>>.Failure($"Error searching transactions: {ex.Message}");
         }
     }
 
@@ -152,7 +152,7 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
         try
         {
             if (string.IsNullOrWhiteSpace(cpf))
-                return Result<decimal>.Failure("CPF é obrigatório.");
+                return Result<decimal>.Failure("CPF is required.");
 
             // Try to get from cache
             var cacheKey = $"{BalanceCacheKeyPrefix}{cpf}";
@@ -178,7 +178,7 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
         }
         catch (Exception ex)
         {
-            return Result<decimal>.Failure($"Erro ao calcular balanço: {ex.Message}");
+            return Result<decimal>.Failure($"Error calculating balance: {ex.Message}");
         }
     }
 
@@ -207,7 +207,7 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
         }
         catch (Exception ex)
         {
-            return Result.Failure($"Erro ao limpar dados: {ex.Message}");
+            return Result.Failure($"Error clearing data: {ex.Message}");
         }
     }
 

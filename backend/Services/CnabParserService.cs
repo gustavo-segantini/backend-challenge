@@ -42,13 +42,13 @@ public class CnabParserService : ICnabParserService
             }
 
             if (transactions.Count == 0)
-                return Result<List<Transaction>>.Failure("Nenhuma transação válida foi encontrada no arquivo.");
+                return Result<List<Transaction>>.Failure("No valid transactions found in the file.");
 
             return Result<List<Transaction>>.Success(transactions);
         }
         catch (Exception ex)
         {
-            return Result<List<Transaction>>.Failure($"Erro ao processar arquivo CNAB: {ex.Message}");
+            return Result<List<Transaction>>.Failure($"Error processing CNAB file: {ex.Message}");
         }
     }
 

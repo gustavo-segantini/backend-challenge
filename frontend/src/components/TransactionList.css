@@ -24,6 +24,8 @@
   gap: 12px;
   max-height: 600px;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .transaction-list::-webkit-scrollbar {
@@ -130,6 +132,7 @@
 .transaction-amount-container {
   flex-shrink: 0;
   text-align: right;
+  min-width: 120px;
 }
 
 .transaction-amount {

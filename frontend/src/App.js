@@ -8,8 +8,12 @@ import api, { setAuthToken, getStoredToken } from './services/api';
 function App() {
   const [cpf, setCpf] = useState('');
   const [transactions, setTransactions] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [searched, setSearched] = useState(false);
@@ -49,9 +53,9 @@ function App() {
     }
   }, []);
 
-  const loadTransactions = async (searchCpf) => {
+  const loadTransactions = async (searchCpf, targetPage = 1) => {
     if (!isAuthenticated) {
-      setError('Faça login para consultar.');
+      setError('Please log in to search.');
       return;
     }
     if (!searchCpf || searchCpf.trim() === '') {
@@ -60,23 +64,48 @@ function App() {
     }
 
     try {
-      setLoading(true);
+      const isInitialLoad = targetPage === 1;
+      if (isInitialLoad) {
+        setLoading(true);
+      } else {
+        setIsLoadingMore(true);
+      }
       setError(null);
-      
+
       const [transRes, balanceRes] = await Promise.all([
-        api.get(`/transactions/${searchCpf}`),
-        api.get(`/transactions/${searchCpf}/balance`),
+        api.get(`/transactions/${searchCpf}`, {
+          params: {
+            page: targetPage,
+            pageSize,
+          },
+        }),
+        targetPage === 1 ? api.get(`/transactions/${searchCpf}/balance`) : Promise.resolve({ data: { balance: null } }),
       ]);
 
-      setTransactions(transRes.data || []);
-      setBalance(balanceRes.data.balance);
+      const paged = transRes.data || {};
+      const newItems = paged.items || [];
+
+      // On initial load, replace; on pagination, append
+      if (isInitialLoad) {
+        setTransactions(newItems);
+        setBalance(balanceRes.data.balance);
+      } else {
+        setTransactions((prev) => [...prev, ...newItems]);
+      }
+
+      setTotalCount(paged.totalCount || 0);
+      setPage(targetPage);
       setSearched(true);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load transactions');
-      setTransactions([]);
+      if (targetPage === 1) {
+        setTransactions([]);
+        setTotalCount(0);
+      }
       setBalance(null);
     } finally {
       setLoading(false);
+      setIsLoadingMore(false);
     }
   };
 
@@ -86,20 +115,28 @@ function App() {
       setTimeout(() => setMessage(null), 5000);
       // Clear previous search after upload
       setTransactions([]);
+      setTotalCount(0);
       setBalance(null);
       setSearched(false);
       setCpf('');
+      setPage(1);
     }
   };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    loadTransactions(cpf);
+    setPage(1);
+    loadTransactions(cpf, 1);
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1) return;
+    loadTransactions(cpf, newPage);
   };
 
   const handleClear = async () => {
     if (!isAuthenticated) {
-      setError('Faça login para limpar os dados.');
+      setError('Please log in to clear data.');
       return;
     }
     if (window.confirm('Are you sure you want to delete all data?')) {
@@ -120,7 +157,7 @@ function App() {
   return (
     <div className="App">
       <header className="header">
-        <h1>CNAB Transaction Manager</h1>
+        <h1>Transaction Manager</h1>
         <p>Upload and manage financial transactions</p>
       </header>
 
@@ -162,8 +199,8 @@ function App() {
         <div className="content">
           {!isAuthenticated ? (
             <div className="locked-card">
-              <h2>Autenticação necessária</h2>
-              <p>Faça login para enviar arquivos e consultar transações.</p>
+              <h2>Authentication Required</h2>
+              <p>Please log in to upload files and search transactions.</p>
             </div>
           ) : (
             <>
@@ -209,7 +246,14 @@ function App() {
                       </div>
                     )}
 
-                    <TransactionList transactions={transactions} cpf={cpf} />
+                    <TransactionList
+                      transactions={transactions}
+                      cpf={cpf}
+                      totalCount={totalCount}
+                      pageSize={pageSize}
+                      onPageChange={handlePageChange}
+                      isLoadingMore={isLoadingMore}
+                    />
                   </>
                 ) : (
                   <div className="empty-state">
@@ -223,7 +267,7 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p>&copy; 2024 CNAB Transaction Manager. All rights reserved.</p>
+        <p>&copy; 2024 Transaction Manager. All rights reserved.</p>
       </footer>
     </div>
   );

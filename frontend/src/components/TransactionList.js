@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import './TransactionList.css';
 
-function TransactionList({ transactions, cpf }) {
+function TransactionList({ transactions, cpf, totalCount = 0, pageSize = 10, onPageChange, isLoadingMore = false }) {
+  const scrollContainerRef = useRef(null);
+  const sentinelRef = useRef(null);
   const transactionTypes = {
     '1': { name: 'Debit', nature: 'Income', sign: '+' },
     '2': { name: 'Boleto', nature: 'Expense', sign: '-' },
@@ -32,6 +34,29 @@ function TransactionList({ transactions, cpf }) {
     return `${dateStr} ${timeStr}`;
   };
 
+  // Show all loaded transactions (infinite scroll appends to the list)
+  // hasMore checks if we loaded all items from the server
+  const hasMore = transactions.length < totalCount;
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (!hasMore || isLoadingMore || !sentinelRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore && onPageChange) {
+          // Calculate next page based on how many items we have
+          const nextPage = Math.floor(transactions.length / pageSize) + 1;
+          onPageChange(nextPage);
+        }
+      },
+      { threshold: 0.1, root: scrollContainerRef.current }
+    );
+
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [transactions.length, totalCount, hasMore, isLoadingMore, onPageChange, pageSize]);
+
   return (
     <div className="transaction-list-container">
       <h2>Transactions {cpf && `for CPF: ${cpf}`}</h2>
@@ -39,8 +64,10 @@ function TransactionList({ transactions, cpf }) {
         <p className="empty-message">No transactions found for this CPF.</p>
       ) : (
         <>
-          <p className="transaction-count">Showing {transactions.length} transaction(s)</p>
-          <div className="transaction-list">
+          <p className="transaction-count">
+            Showing {transactions.length} of {totalCount} transaction(s)
+          </p>
+          <div className="transaction-list" ref={scrollContainerRef}>
             {transactions.map((transaction) => {
               const typeInfo = transactionTypes[transaction.natureCode] || { name: 'Unknown', nature: 'Unknown', sign: '+' };
               const signedAmount = getSignedAmount(transaction);
@@ -91,7 +118,22 @@ function TransactionList({ transactions, cpf }) {
                 </div>
               );
             })}
+            {hasMore && (
+              <div
+                ref={sentinelRef}
+                className="scroll-sentinel"
+                style={{ height: '20px', marginTop: '10px' }}
+              >
+                {isLoadingMore && (
+                  <p className="more-transactions">Loading more transactions...</p>
+                )}
+              </div>
+            )}
           </div>
+
+          {!hasMore && transactions.length > 0 && (
+            <p className="more-transactions">No more transactions</p>
+          )}
         </>
       )}
     </div>

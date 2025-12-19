@@ -56,6 +56,7 @@
   background-color: #f8f9fa;
   transition: all 0.3s ease;
   gap: 15px;
+  animation: fadeIn 0.4s ease-out;
 }
 
 .transaction-item:hover {
@@ -166,9 +167,19 @@
 }
 
 @media (max-width: 768px) {
+  .transaction-list-container {
+    padding: 15px;
+  }
+
+  .transaction-list-container h2 {
+    font-size: 18px;
+  }
+
   .transaction-item {
     flex-direction: column;
     align-items: flex-start;
+    padding: 10px;
+    gap: 10px;
   }
 
   .transaction-date {
@@ -178,5 +189,81 @@
   .transaction-amount-container {
     align-self: flex-end;
     margin-top: 8px;
+  }
+
+  .transaction-type-badge {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+
+  .transaction-description {
+    font-size: 13px;
+  }
+
+  .transaction-amount {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .transaction-list-container {
+    padding: 12px;
+  }
+
+  .transaction-list-container h2 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .transaction-list {
+    max-height: 500px;
+    gap: 10px;
+  }
+
+  .transaction-item {
+    padding: 8px;
+  }
+
+  .transaction-header {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .transaction-count {
+    font-size: 12px;
+  }
+
+  .store-info {
+    font-size: 12px;
+  }
+
+  .transaction-meta {
+    font-size: 10px;
+  }
+
+  .transaction-type-badge {
+    width: 22px;
+    height: 22px;
+    font-size: 9px;
+  }
+}
+
+/* Animation for fade-in effect */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .transaction-item {
+    animation: none;
   }
 }

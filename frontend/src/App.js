@@ -1,37 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import './App.css';
 import UploadForm from './components/UploadForm';
 import TransactionList from './components/TransactionList';
-import StoreList from './components/StoreList';
 import api from './services/api';
 
 function App() {
+  const [cpf, setCpf] = useState('');
   const [transactions, setTransactions] = useState([]);
-  const [stores, setStores] = useState([]);
-  const [totalBalance, setTotalBalance] = useState(0);
+  const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
+  const [searched, setSearched] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const loadTransactions = async (searchCpf) => {
+    if (!searchCpf || searchCpf.trim() === '') {
+      setError('Please enter a CPF/CNPJ');
+      return;
+    }
 
-  const loadData = async () => {
     try {
       setLoading(true);
-      const [transRes, storesRes, balanceRes] = await Promise.all([
-        api.get('/transactions'),
-        api.get('/transactions/stores'),
-        api.get('/transactions/balance'),
+      setError(null);
+      
+      const [transRes, balanceRes] = await Promise.all([
+        api.get(`/transactions/${searchCpf}`),
+        api.get(`/transactions/${searchCpf}/balance`),
       ]);
 
-      setTransactions(transRes.data);
-      setStores(storesRes.data);
-      setTotalBalance(balanceRes.data.totalBalance);
-      setError(null);
+      setTransactions(transRes.data || []);
+      setBalance(balanceRes.data.balance);
+      setSearched(true);
     } catch (err) {
-      setError(err.message || 'Failed to load data');
+      setError(err.response?.data?.error || 'Failed to load transactions');
+      setTransactions([]);
+      setBalance(null);
     } finally {
       setLoading(false);
     }
@@ -41,19 +44,31 @@ function App() {
     if (success) {
       setMessage(msg);
       setTimeout(() => setMessage(null), 5000);
-      await loadData();
+      // Clear previous search after upload
+      setTransactions([]);
+      setBalance(null);
+      setSearched(false);
+      setCpf('');
     }
+  };
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    loadTransactions(cpf);
   };
 
   const handleClear = async () => {
     if (window.confirm('Are you sure you want to delete all data?')) {
       try {
         await api.delete('/transactions');
-        setMessage('All data cleared');
+        setMessage('All data cleared successfully');
         setTimeout(() => setMessage(null), 5000);
-        await loadData();
+        setTransactions([]);
+        setBalance(null);
+        setSearched(false);
+        setCpf('');
       } catch (err) {
-        setError(err.message || 'Failed to clear data');
+        setError(err.response?.data?.error || 'Failed to clear data');
       }
     }
   };
@@ -77,26 +92,47 @@ function App() {
             </button>
           </section>
 
+          <section className="search-section">
+            <form onSubmit={handleSearch} className="search-form">
+              <div className="search-input-group">
+                <input
+                  type="text"
+                  placeholder="Enter CPF/CNPJ (11 digits)"
+                  value={cpf}
+                  onChange={(e) => setCpf(e.target.value)}
+                  className="search-input"
+                  maxLength="11"
+                />
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Searching...' : 'Search Transactions'}
+                </button>
+              </div>
+            </form>
+          </section>
+
           <section className="data-section">
             {loading ? (
               <div className="loading">Loading data...</div>
-            ) : (
+            ) : searched ? (
               <>
-                <div className="balance-card">
-                  <h2>Total Balance</h2>
-                  <p className={`balance-value ${totalBalance >= 0 ? 'positive' : 'negative'}`}>
-                    {new Intl.NumberFormat('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    }).format(totalBalance)}
-                  </p>
-                </div>
+                {balance !== null && (
+                  <div className="balance-card">
+                    <h2>Balance for CPF: {cpf}</h2>
+                    <p className={`balance-value ${balance >= 0 ? 'positive' : 'negative'}`}>
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(balance)}
+                    </p>
+                  </div>
+                )}
 
-                <div className="two-column">
-                  <StoreList stores={stores} />
-                  <TransactionList transactions={transactions} />
-                </div>
+                <TransactionList transactions={transactions} cpf={cpf} />
               </>
+            ) : (
+              <div className="empty-state">
+                <p>Upload a CNAB file and search by CPF/CNPJ to view transactions</p>
+              </div>
             )}
           </section>
         </div>

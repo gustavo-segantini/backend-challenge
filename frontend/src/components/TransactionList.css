@@ -12,6 +12,12 @@
   color: #2c3e50;
 }
 
+.transaction-count {
+  color: #7f8c8d;
+  font-size: 13px;
+  margin-bottom: 15px;
+}
+
 .transaction-list {
   display: flex;
   flex-direction: column;
@@ -84,6 +90,13 @@
   font-weight: 600;
   color: #2c3e50;
   font-size: 14px;
+}
+
+.transaction-nature {
+  font-size: 11px;
+  color: #95a5a6;
+  margin-left: 8px;
+  font-weight: normal;
 }
 
 .transaction-date {

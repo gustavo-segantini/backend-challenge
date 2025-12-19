@@ -109,7 +109,11 @@ namespace CnabApi.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Cpf");
+
                     b.HasIndex("TransactionDate", "Cpf");
+
+                    b.HasIndex("NatureCode");
 
                     b.ToTable("Transactions");
                 });

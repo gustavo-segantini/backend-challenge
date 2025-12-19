@@ -70,6 +70,12 @@ public class CnabDbContext(DbContextOptions<CnabDbContext> options) : DbContext(
         modelBuilder.Entity<Transaction>()
             .HasIndex(t => new { t.TransactionDate, t.Cpf });
 
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => t.Cpf);
+
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => t.NatureCode);
+
         // Users configuration
         modelBuilder.Entity<User>()
             .HasKey(u => u.Id);

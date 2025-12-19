@@ -118,12 +118,13 @@ public class TransactionServiceTests : IDisposable
         );
 
         // Act
-        var result = await _transactionService.GetTransactionsByCpfAsync(targetCpf);
+        var result = await _transactionService.GetTransactionsByCpfAsync(BuildOptions(targetCpf));
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data.Should().HaveCount(2);
-        result.Data.Should().OnlyContain(t => t.Cpf == targetCpf);
+        result.Data.Should().NotBeNull();
+        result.Data!.Items.Should().HaveCount(2);
+        result.Data.Items.Should().OnlyContain(t => t.Cpf == targetCpf);
     }
 
     [Fact]
@@ -135,11 +136,12 @@ public class TransactionServiceTests : IDisposable
         );
 
         // Act
-        var result = await _transactionService.GetTransactionsByCpfAsync("99999999999");
+        var result = await _transactionService.GetTransactionsByCpfAsync(BuildOptions("99999999999"));
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data.Should().BeEmpty();
+        result.Data.Should().NotBeNull();
+        result.Data!.Items.Should().BeEmpty();
     }
 
     [Fact]
@@ -156,18 +158,18 @@ public class TransactionServiceTests : IDisposable
         await SeedTransactions(oldTransaction, newTransaction);
 
         // Act
-        var result = await _transactionService.GetTransactionsByCpfAsync(cpf);
+        var result = await _transactionService.GetTransactionsByCpfAsync(BuildOptions(cpf));
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data![0].TransactionDate.Should().BeAfter(result.Data[1].TransactionDate);
+        result.Data!.Items[0].TransactionDate.Should().BeAfter(result.Data.Items[1].TransactionDate);
     }
 
     [Fact]
     public async Task GetTransactionsByCpfAsync_WithEmptyCpf_ShouldReturnFailure()
     {
         // Act
-        var result = await _transactionService.GetTransactionsByCpfAsync("");
+        var result = await _transactionService.GetTransactionsByCpfAsync(BuildOptions(""));
 
         // Assert
         result.IsSuccess.Should().BeFalse();
@@ -178,7 +180,7 @@ public class TransactionServiceTests : IDisposable
     public async Task GetTransactionsByCpfAsync_WithWhitespaceCpf_ShouldReturnFailure()
     {
         // Act
-        var result = await _transactionService.GetTransactionsByCpfAsync("   ");
+        var result = await _transactionService.GetTransactionsByCpfAsync(BuildOptions("   "));
 
         // Assert
         result.IsSuccess.Should().BeFalse();
@@ -344,6 +346,16 @@ public class TransactionServiceTests : IDisposable
             TransactionDate = DateTime.UtcNow,
             TransactionTime = new TimeSpan(12, 0, 0),
             BankCode = natureCode
+        };
+    }
+
+    private static TransactionQueryOptions BuildOptions(string cpf, int page = 1, int pageSize = 50)
+    {
+        return new TransactionQueryOptions
+        {
+            Cpf = cpf,
+            Page = page,
+            PageSize = pageSize
         };
     }
 

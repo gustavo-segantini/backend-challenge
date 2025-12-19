@@ -133,19 +133,20 @@ public class TransactionsControllerTests
             CreateTransaction("1", 100m, cpf),
             CreateTransaction("2", 50m, cpf)
         };
-        
+
         _transactionServiceMock
-            .Setup(x => x.GetTransactionsByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<List<Transaction>>.Success(transactions));
+            .Setup(x => x.GetTransactionsByCpfAsync(It.IsAny<TransactionQueryOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<PagedResult<Transaction>>.Success(CreatePaged(transactions, 2, 1, 50)));
 
         // Act
-        var result = await _controller.GetTransactionsByCpf(cpf, CancellationToken.None);
+        var result = await _controller.GetTransactionsByCpf(cpf, 1, 50, null, null, null, "desc", CancellationToken.None);
 
         // Assert
         var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var returnedTransactions = okResult.Value.Should().BeOfType<List<Transaction>>().Subject;
-        returnedTransactions.Should().HaveCount(2);
-        returnedTransactions.Should().AllSatisfy(t => t.Cpf.Should().Be(cpf));
+        var returned = okResult.Value.Should().BeOfType<PagedResult<Transaction>>().Subject;
+        returned.Items.Should().HaveCount(2);
+        returned.TotalCount.Should().Be(2);
+        returned.Items.Should().AllSatisfy(t => t.Cpf.Should().Be(cpf));
     }
 
     [Fact]
@@ -154,16 +155,17 @@ public class TransactionsControllerTests
         // Arrange
         var cpf = "99999999999";
         _transactionServiceMock
-            .Setup(x => x.GetTransactionsByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<List<Transaction>>.Success(new List<Transaction>()));
+            .Setup(x => x.GetTransactionsByCpfAsync(It.IsAny<TransactionQueryOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<PagedResult<Transaction>>.Success(CreatePaged(new List<Transaction>(), 0, 1, 50)));
 
         // Act
-        var result = await _controller.GetTransactionsByCpf(cpf, CancellationToken.None);
+        var result = await _controller.GetTransactionsByCpf(cpf, 1, 50, null, null, null, "desc", CancellationToken.None);
 
         // Assert
         var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var returnedTransactions = okResult.Value.Should().BeOfType<List<Transaction>>().Subject;
-        returnedTransactions.Should().BeEmpty();
+        var returned = okResult.Value.Should().BeOfType<PagedResult<Transaction>>().Subject;
+        returned.Items.Should().BeEmpty();
+        returned.TotalCount.Should().Be(0);
     }
 
     [Fact]
@@ -172,11 +174,11 @@ public class TransactionsControllerTests
         // Arrange
         var cpf = "";
         _transactionServiceMock
-            .Setup(x => x.GetTransactionsByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<List<Transaction>>.Failure("CPF é obrigatório."));
+            .Setup(x => x.GetTransactionsByCpfAsync(It.IsAny<TransactionQueryOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<PagedResult<Transaction>>.Failure("CPF é obrigatório."));
 
         // Act
-        var result = await _controller.GetTransactionsByCpf(cpf, CancellationToken.None);
+        var result = await _controller.GetTransactionsByCpf(cpf, 1, 50, null, null, null, "desc", CancellationToken.None);
 
         // Assert
         var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
@@ -191,15 +193,15 @@ public class TransactionsControllerTests
         // Arrange
         var cpf = "12345678901";
         _transactionServiceMock
-            .Setup(x => x.GetTransactionsByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<List<Transaction>>.Success(new List<Transaction>()));
+            .Setup(x => x.GetTransactionsByCpfAsync(It.IsAny<TransactionQueryOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<PagedResult<Transaction>>.Success(CreatePaged(new List<Transaction>(), 0, 1, 50)));
 
         // Act
-        await _controller.GetTransactionsByCpf(cpf, CancellationToken.None);
+        await _controller.GetTransactionsByCpf(cpf, 1, 50, null, null, null, "desc", CancellationToken.None);
 
         // Assert
         _transactionServiceMock.Verify(
-            x => x.GetTransactionsByCpfAsync(cpf, It.IsAny<CancellationToken>()), 
+            x => x.GetTransactionsByCpfAsync(It.IsAny<TransactionQueryOptions>(), It.IsAny<CancellationToken>()), 
             Times.Once);
     }
 
@@ -390,6 +392,17 @@ public class TransactionsControllerTests
             TransactionDate = DateTime.UtcNow,
             TransactionTime = new TimeSpan(12, 0, 0),
             BankCode = natureCode
+        };
+    }
+
+    private static PagedResult<Transaction> CreatePaged(List<Transaction> items, int total, int page, int pageSize)
+    {
+        return new PagedResult<Transaction>
+        {
+            Items = items,
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize
         };
     }
 

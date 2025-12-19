@@ -23,6 +23,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #f8f9fa;
   color: var(--text-color);
+  line-height: 1.6;
 }
 
 .App {
@@ -51,6 +52,20 @@ body {
   opacity: 0.9;
 }
 
+@media (max-width: 768px) {
+  .header {
+    padding: 30px 15px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .header p {
+    font-size: 14px;
+  }
+}
+
 /* Main Content */
 .container {
   flex: 1;
@@ -58,6 +73,18 @@ body {
   margin: 0 auto;
   width: 100%;
   padding: 20px;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 10px;
+  }
 }
 
 .content {
@@ -74,6 +101,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@media (max-width: 768px) {
+  .upload-section {
+    padding: 20px;
+    gap: 15px;
+  }
 }
 
 .search-section {
@@ -81,6 +116,12 @@ body {
   padding: 30px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .search-section {
+    padding: 20px;
+  }
 }
 
 .search-form {
@@ -93,6 +134,12 @@ body {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+@media (max-width: 480px) {
+  .search-input-group {
+    flex-direction: column;
+  }
 }
 
 .search-input {
@@ -109,6 +156,12 @@ body {
   border-color: var(--secondary-color);
 }
 
+@media (max-width: 480px) {
+  .search-input {
+    width: 100%;
+  }
+}
+
 .empty-state {
   background: var(--white);
   padding: 60px 20px;
@@ -117,6 +170,13 @@ body {
   text-align: center;
   color: #7f8c8d;
   font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  .empty-state {
+    padding: 40px 20px;
+    font-size: 16px;
+  }
 }
 
 .data-section {
@@ -133,6 +193,7 @@ body {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   text-align: center;
+  animation: fadeInUp 0.5s ease-out;
 }
 
 .balance-card h2 {
@@ -152,6 +213,30 @@ body {
 
 .balance-value.negative {
   color: #e74c3c;
+}
+
+@media (max-width: 768px) {
+  .balance-card {
+    padding: 20px;
+  }
+
+  .balance-value {
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 480px) {
+  .balance-card {
+    padding: 15px;
+  }
+
+  .balance-card h2 {
+    font-size: 14px;
+  }
+
+  .balance-value {
+    font-size: 24px;
+  }
 }
 
 /* Two Column Layout */
@@ -224,6 +309,12 @@ body {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .btn-primary {
   background-color: var(--secondary-color);
   color: var(--white);
@@ -232,6 +323,13 @@ body {
 .btn-danger {
   background-color: var(--danger-color);
   color: var(--white);
+}
+
+@media (max-width: 480px) {
+  .btn {
+    width: 100%;
+    padding: 12px 16px;
+  }
 }
 
 /* Footer */
@@ -246,4 +344,34 @@ body {
 
 .footer p {
   margin: 0;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

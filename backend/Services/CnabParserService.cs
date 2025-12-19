@@ -72,7 +72,8 @@ public class CnabParserService : ICnabParserService
             var cpfCnpj = line.Substring(19, 11).Trim();
             var card = line.Substring(30, 12).Trim();
             var timeStr = line.Substring(42, 6).Trim();
-            // Store Owner and Store Name fields are parsed but not stored (legacy CNAB fields)
+            var storeOwner = line.Substring(48, 14).Trim();
+            var storeName = line.Substring(62, 18).Trim();
 
             // Parse and validate amount
             if (!decimal.TryParse(amountStr, out var amount))
@@ -95,6 +96,8 @@ public class CnabParserService : ICnabParserService
                 NatureCode = type,
                 Amount = amount,
                 Card = card,
+                StoreOwner = storeOwner,
+                StoreName = storeName,
                 TransactionDate = date,
                 TransactionTime = time,
                 CreatedAt = DateTime.UtcNow

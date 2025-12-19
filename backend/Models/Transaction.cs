@@ -44,6 +44,18 @@ public class Transaction
     public string Card { get; set; } = string.Empty;
 
     /// <summary>
+    /// Store owner name (14 characters).
+    /// </summary>
+    [MaxLength(14)]
+    public string StoreOwner { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Store name (18 characters).
+    /// </summary>
+    [MaxLength(18)]
+    public string StoreName { get; set; } = string.Empty;
+
+    /// <summary>
     /// Date when the transaction occurred.
     /// </summary>
     [Column(TypeName = "timestamp with time zone")]

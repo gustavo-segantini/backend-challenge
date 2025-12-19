@@ -66,11 +66,12 @@ function TransactionList({ transactions, cpf }) {
                       </span>
                     </div>
                     <div className="transaction-details">
+                      <p className="store-info">
+                        <strong>{transaction.storeName || 'N/A'}</strong>
+                        {transaction.storeOwner && ` - ${transaction.storeOwner}`}
+                      </p>
                       <p className="card-info">
                         Card: <strong>{transaction.card}</strong>
-                      </p>
-                      <p className="transaction-meta">
-                        Bank Code: {transaction.bankCode}
                       </p>
                     </div>
                   </div>
@@ -80,7 +81,7 @@ function TransactionList({ transactions, cpf }) {
                         signedAmount >= 0 ? 'positive' : 'negative'
                       }`}
                     >
-                      {signedAmount >= 0 ? '+' : ''}
+                      {signedAmount < 0 ? '(-)' : ''}
                       {new Intl.NumberFormat('pt-BR', {
                         style: 'currency',
                         currency: 'BRL',

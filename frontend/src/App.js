@@ -3,6 +3,8 @@ import './App.css';
 import UploadForm from './components/UploadForm';
 import TransactionList from './components/TransactionList';
 import LoginForm from './components/LoginForm';
+import Spinner from './components/Spinner';
+import Toast from './components/Toast';
 import api, { setAuthToken, getStoredToken } from './services/api';
 
 function App() {
@@ -196,6 +198,17 @@ function App() {
         {error && <div className="alert alert-error">{error}</div>}
         {message && <div className="alert alert-success">{message}</div>}
 
+        <Toast
+          message={error}
+          type="error"
+          onClose={() => setError(null)}
+        />
+        <Toast
+          message={message}
+          type="success"
+          onClose={() => setMessage(null)}
+        />
+
         <div className="content">
           {!isAuthenticated ? (
             <div className="locked-card">
@@ -231,7 +244,7 @@ function App() {
 
               <section className="data-section">
                 {loading ? (
-                  <div className="loading">Loading data...</div>
+                  <Spinner />
                 ) : searched ? (
                   <>
                     {balance !== null && (

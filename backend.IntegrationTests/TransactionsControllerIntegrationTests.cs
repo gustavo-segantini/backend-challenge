@@ -99,14 +99,15 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         await client.PostAsync("/api/transactions/upload", uploadContent);
 
         // Act
-        var response = await client.GetAsync("/api/transactions/09620676017");
+        var response = await client.GetAsync("/api/transactions/09620676017?page=1&pageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var transactions = await response.Content.ReadFromJsonAsync<List<Transaction>>();
-        transactions.Should().NotBeNull();
-        transactions!.Count.Should().Be(2);
-        transactions.All(t => t.Cpf == "09620676017").Should().BeTrue();
+        var paged = await response.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
+        paged.Should().NotBeNull();
+        paged!.Items.Count.Should().Be(2);
+        paged.TotalCount.Should().Be(2);
+        paged.Items.All(t => t.Cpf == "09620676017").Should().BeTrue();
     }
 
     [Fact]
@@ -116,13 +117,14 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         var client = await CreateAuthorizedClientAsync();
 
         // Act
-        var response = await client.GetAsync("/api/transactions/99999999999");
+        var response = await client.GetAsync("/api/transactions/99999999999?page=1&pageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var transactions = await response.Content.ReadFromJsonAsync<List<Transaction>>();
-        transactions.Should().NotBeNull();
-        transactions!.Should().BeEmpty();
+        var paged = await response.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
+        paged.Should().NotBeNull();
+        paged!.Items.Should().BeEmpty();
+        paged.TotalCount.Should().Be(0);
     }
 
     [Fact]
@@ -193,10 +195,11 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         
         // Verify data is cleared
-        var getResponse = await client.GetAsync("/api/transactions/09620676017");
-        var transactions = await getResponse.Content.ReadFromJsonAsync<List<Transaction>>();
+        var getResponse = await client.GetAsync("/api/transactions/09620676017?page=1&pageSize=10");
+        var transactions = await getResponse.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
         transactions.Should().NotBeNull();
-        transactions!.Should().BeEmpty();
+        transactions!.Items.Should().BeEmpty();
+        transactions.TotalCount.Should().Be(0);
     }
 
     [Fact]
@@ -223,10 +226,11 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         uploadResult!.Count.Should().Be(4);
 
         // Act & Assert - Query CPF 1
-        var queryResponse1 = await client.GetAsync("/api/transactions/09620676017");
+        var queryResponse1 = await client.GetAsync("/api/transactions/09620676017?page=1&pageSize=10");
         queryResponse1.StatusCode.Should().Be(HttpStatusCode.OK);
-        var transactions1 = await queryResponse1.Content.ReadFromJsonAsync<List<Transaction>>();
-        transactions1!.Count.Should().Be(3);
+        var transactions1 = await queryResponse1.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
+        transactions1!.Items.Count.Should().Be(3);
+        transactions1.TotalCount.Should().Be(3);
 
         // Act & Assert - Balance CPF 1
         var balanceResponse1 = await client.GetAsync("/api/transactions/09620676017/balance");
@@ -234,9 +238,10 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         balance1!.Balance.Should().Be(-102.00m); // 152 - 112 - 142 = -102
 
         // Act & Assert - Query CPF 2
-        var queryResponse2 = await client.GetAsync("/api/transactions/84515254073");
-        var transactions2 = await queryResponse2.Content.ReadFromJsonAsync<List<Transaction>>();
-        transactions2!.Count.Should().Be(1);
+        var queryResponse2 = await client.GetAsync("/api/transactions/84515254073?page=1&pageSize=10");
+        var transactions2 = await queryResponse2.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
+        transactions2!.Items.Count.Should().Be(1);
+        transactions2.TotalCount.Should().Be(1);
 
         // Act & Assert - Balance CPF 2
         var balanceResponse2 = await client.GetAsync("/api/transactions/84515254073/balance");
@@ -248,9 +253,10 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         clearResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Verify all data cleared
-        var finalQuery = await client.GetAsync("/api/transactions/09620676017");
-        var finalTransactions = await finalQuery.Content.ReadFromJsonAsync<List<Transaction>>();
-        finalTransactions.Should().BeEmpty();
+        var finalQuery = await client.GetAsync("/api/transactions/09620676017?page=1&pageSize=10");
+        var finalTransactions = await finalQuery.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
+        finalTransactions!.Items.Should().BeEmpty();
+        finalTransactions.TotalCount.Should().Be(0);
     }
 
     #region Response DTOs
@@ -274,6 +280,14 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
         return client;
+    }
+
+    private class PagedTransactionsResponse
+    {
+        public List<Transaction> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
     }
 
     private class UploadResponse

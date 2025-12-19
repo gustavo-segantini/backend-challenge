@@ -1,4 +1,3 @@
-using CnabApi.Common;
 using CnabApi.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;

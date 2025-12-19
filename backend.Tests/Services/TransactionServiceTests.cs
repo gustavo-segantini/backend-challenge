@@ -1,4 +1,3 @@
-using CnabApi.Common;
 using CnabApi.Data;
 using CnabApi.Models;
 using CnabApi.Services;

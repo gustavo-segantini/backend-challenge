@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.IdentityModel.Tokens;
 using CnabApi.Data;
 using CnabApi.Data.Seed;
@@ -122,6 +123,44 @@ builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// Add caching - Redis for production, in-memory for test
+if (builder.Environment.EnvironmentName == "Test")
+{
+    builder.Services.AddMemoryCache();
+}
+else
+{
+    var redisConnection = builder.Configuration.GetConnectionString("RedisConnection") 
+        ?? "localhost:6379";
+    
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnection;
+    });
+}
+
+// Add response compression
+builder.Services.AddResponseCompression(options =>
+{
+    options.Providers.Add<GzipCompressionProvider>();
+    options.EnableForHttps = true;
+    options.MimeTypes = new[]
+    {
+        "application/json",
+        "application/xml",
+        "text/plain",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript"
+    };
+});
+
+builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+{
+    options.Level = System.IO.Compression.CompressionLevel.Optimal;
+});
+
 var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
 
 builder.Services.AddAuthentication(options =>
@@ -150,6 +189,9 @@ var app = builder.Build();
 
 // Add global exception handling middleware (first in pipeline)
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// Enable compression
+app.UseResponseCompression();
 
 app.UseSwagger();
 app.UseSwaggerUI(options =>

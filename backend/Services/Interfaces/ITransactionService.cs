@@ -27,4 +27,14 @@ public interface ITransactionService
     /// Clears all transactions from the database.
     /// </summary>
     Task<Result> ClearAllDataAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Searches transactions by description using full-text search.
+    /// </summary>
+    Task<Result<PagedResult<Transaction>>> SearchTransactionsByDescriptionAsync(
+        string cpf,
+        string searchTerm,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default);
 }

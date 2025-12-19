@@ -112,6 +112,38 @@ public class TransactionsController(
     }
 
     /// <summary>
+    /// Searches transactions by description for a specific CPF using full-text search.
+    /// </summary>
+    /// <param name="cpf">The CPF to filter transactions.</param>
+    /// <param name="searchTerm">The search term to find in transaction descriptions.</param>
+    /// <param name="page">Page number (starting at 1).</param>
+    /// <param name="pageSize">Items per page.</param>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
+    /// <returns>Paged list of matching transactions.</returns>
+    [HttpGet("{cpf}/search")]
+    [ProducesResponseType(typeof(PagedResult<Transaction>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PagedResult<Transaction>>> SearchTransactions(
+        string cpf,
+        [FromQuery] string searchTerm,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _transactionService.SearchTransactionsByDescriptionAsync(
+            cpf,
+            searchTerm,
+            page,
+            pageSize,
+            cancellationToken);
+
+        if (!result.IsSuccess)
+            return BadRequest(new { error = result.ErrorMessage });
+
+        return Ok(result.Data);
+    }
+
+    /// <summary>
     /// Clears all transactions and stores from the database.
     /// WARNING: This operation cannot be undone.
     /// </summary>

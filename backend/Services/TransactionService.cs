@@ -3,9 +3,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using CnabApi.Common;
 using CnabApi.Data;
 using CnabApi.Models;
-using CnabApi.Utilities;
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 
 namespace CnabApi.Services;
 

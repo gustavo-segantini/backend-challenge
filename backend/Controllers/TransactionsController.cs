@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using CnabApi.Models;
 using CnabApi.Services;
 
@@ -22,8 +23,10 @@ public class TransactionsController(
     /// Uploads a CNAB file, parses transactions, and stores them in the database.
     /// </summary>
     /// <param name="file">The CNAB file to upload (format: .txt).</param>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
     /// <returns>Success message with transaction count or error details.</returns>
     [HttpPost("upload")]
+    [Authorize]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -45,6 +48,7 @@ public class TransactionsController(
     /// Retrieves all transactions for a specific CPF ordered by date (most recent first).
     /// </summary>
     /// <param name="cpf">The CPF to filter transactions.</param>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
     /// <returns>List of transactions for the specified CPF.</returns>
     [HttpGet("{cpf}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -63,6 +67,7 @@ public class TransactionsController(
     /// Calculates and returns the total balance for a specific CPF.
     /// </summary>
     /// <param name="cpf">The CPF to calculate balance for.</param>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
     /// <returns>Object containing the total balance value for that CPF.</returns>
     [HttpGet("{cpf}/balance")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -81,8 +86,10 @@ public class TransactionsController(
     /// Clears all transactions and stores from the database.
     /// WARNING: This operation cannot be undone.
     /// </summary>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
     /// <returns>Success message.</returns>
     [HttpDelete]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ClearData(CancellationToken cancellationToken)

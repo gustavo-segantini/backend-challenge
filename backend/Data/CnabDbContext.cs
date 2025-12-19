@@ -16,6 +16,16 @@ public class CnabDbContext(DbContextOptions<CnabDbContext> options) : DbContext(
     /// </summary>
     public DbSet<Transaction> Transactions { get; set; }
 
+    /// <summary>
+    /// DbSet for application users.
+    /// </summary>
+    public DbSet<User> Users { get; set; }
+
+    /// <summary>
+    /// DbSet for refresh tokens.
+    /// </summary>
+    public DbSet<RefreshToken> RefreshTokens { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -59,5 +69,45 @@ public class CnabDbContext(DbContextOptions<CnabDbContext> options) : DbContext(
         // Create composite index for faster lookups
         modelBuilder.Entity<Transaction>()
             .HasIndex(t => new { t.TransactionDate, t.Cpf });
+
+        // Users configuration
+        modelBuilder.Entity<User>()
+            .HasKey(u => u.Id);
+
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Username)
+            .IsUnique();
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.Username)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.Role)
+            .IsRequired()
+            .HasMaxLength(30);
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.PasswordHash)
+            .IsRequired();
+
+        // RefreshTokens configuration
+        modelBuilder.Entity<RefreshToken>()
+            .HasKey(rt => rt.Id);
+
+        modelBuilder.Entity<RefreshToken>()
+            .HasIndex(rt => rt.Token)
+            .IsUnique();
+
+        modelBuilder.Entity<RefreshToken>()
+            .Property(rt => rt.Token)
+            .IsRequired();
+
+        modelBuilder.Entity<RefreshToken>()
+            .HasOne(rt => rt.User)
+            .WithMany(u => u.RefreshTokens)
+            .HasForeignKey(rt => rt.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

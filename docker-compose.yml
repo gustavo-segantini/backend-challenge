@@ -29,6 +29,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__PostgresConnection: "Host=postgres;Port=5432;Database=cnab_db;Username=postgres;Password=postgres"
+      JWT_SIGNING_KEY: "Xn2Q8m5s7p9zA1c3e5g7j9L1N3R5T7V9Y2B4D6F8H0J2K4M6P8R0T2V4X6Z8Q0W2E4"
+      GitHubOAuth__ClientId: "Iv23lirnfLuKQukcTFif"
+      GitHubOAuth__ClientSecret: "bf7d8f93cb5f540475d7bae10afbda33f3edf3c2"
+      GitHubOAuth__CallbackUrl: "http://localhost:5000/api/auth/github/callback"
     ports:
       - "5000:8080"
     depends_on:

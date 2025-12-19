@@ -1,99 +1,93 @@
-# Programming Challenge - Back-end Position
+# CNAB Transactions - Backend Challenge
 
-Please read this document carefully from beginning to end. The purpose of this test is to assess your technical programming skills. The challenge consists of parsing this text file (https://github.com/ByCodersTec/desafio-ruby-on-rails/blob/master/CNAB.txt) and saving its information (financial transactions) into a database of your choice. This challenge should be completed by you at home. Take as much time as you need, but usually you shouldn't need more than a few hours.
+API e frontend para upload de arquivos CNAB, parsing, persistência em PostgreSQL e consulta de transações/saldo por CPF. Projeto empacotado com Docker Compose.
 
-## Challenge Submission Instructions
+## Visão Geral
+- Backend: ASP.NET Core 9 (C#), EF Core, PostgreSQL, Swagger/OpenAPI.
+- Frontend: React com formulário de upload e consultas.
+- Testes: xUnit + FluentAssertions; testes de integração usando WebApplicationFactory.
+- Deploy local: Docker Compose com `api`, `postgres`, `frontend`.
 
-1.  First, fork this project to your Github account (create one if you don't have it).
-2.  Implement the project as described below in your local clone.
-3.  Send the project or the fork/link to your ByCoders contact with a copy to **rh@bycoders.com.br**.
+Documentação completa dos endpoints: [API_DOCUMENTATION.md](API_DOCUMENTATION.md).
 
-## Project Description
+## Arquitetura
+- API REST: [backend/Program.cs](backend/Program.cs) com controllers em [backend/Controllers](backend/Controllers).
+- Camada de domínio/serviços: parser, upload, transações e arquivos em [backend/Services](backend/Services).
+- Persistência: EF Core + migrations em [backend/Data](backend/Data).
+- Middleware: tratamento global de erros (ExceptionHandlingMiddleware).
 
-You received a CNAB file with financial transaction data from several stores. We need to create a way for this data to be imported into a database. Your task is to create a web interface that accepts uploads of the CNAB file (https://github.com/ByCodersTec/desafio-ruby-on-rails/blob/master/CNAB.txt), normalizes the data, stores it in a relational database, and displays this information on the screen.
+## Pré-requisitos
+- Docker e Docker Compose
+- .NET 9 SDK (para rodar localmente sem Docker)
+- Node 20+ (apenas se quiser rodar o frontend fora do Docker)
 
-## Web Application Requirements
+## Como rodar com Docker (recomendado)
+Na raiz do repositório:
 
-Your web application **MUST**:
+```bash
+docker-compose up --build
+```
 
-1.  Have a screen (via a form) to upload the file\
-    *Extra points if you don't use a popular CSS framework.*
+Serviços após subir:
+- API: http://localhost:5000
+- Swagger: http://localhost:5000/swagger
+- Frontend: http://localhost:3000
+- PostgreSQL: localhost:5432 (user: postgres, password: postgres)
 
-2.  Parse the received file, normalize the data, and correctly save it
-    in a relational database\
-    *(Pay attention to the CNAB documentation below.)*
+Para derrubar: `docker-compose down`.
 
-3.  Display a **list of imported operations by store**, including a
-    **total account balance**
+## Como rodar só a API (sem Docker)
+1) Configurar connection string (opcional) via variável `ConnectionStrings__PostgresConnection` ou editar `appsettings.json`.
+2) Rodar migrations (opcional em ambiente de dev usando InMemory):
 
-4.  Be written in your preferred programming language
+```bash
+dotnet ef database update --project backend
+```
 
-5.  Be simple to configure and run in a Unix-based system (Linux or
-    macOS)\
-    *(Use only free/open-source languages and libraries.)*
+3) Executar API:
 
-6.  Use **Git** with atomic and well-described commits
+```bash
+dotnet run --project backend
+```
 
-7.  Use **PostgreSQL, MySQL, or SQL Server**
+API ficará em http://localhost:5000 (Swagger em /swagger).
 
-8.  Have **automated tests**
+## Testes
+- Testes unitários e de integração:
 
-9.  Use **Docker Compose**\
-    *Extra points if you use it.*
+```bash
+dotnet test
+```
 
-10. Include a **README** describing the project and its setup
+- Coverage (exemplo):
 
-11. Include instructions describing **how to consume the API endpoint**
+```bash
+dotnet test --collect:"XPlat Code Coverage"
+```
 
-## The application does NOT need to:
+## Endpoints principais
+- POST /api/transactions/upload — upload de arquivo CNAB (multipart/form-data)
+- GET /api/transactions/{cpf} — lista transações do CPF
+- GET /api/transactions/{cpf}/balance — saldo consolidado do CPF
+- DELETE /api/transactions — limpa dados
 
-1.  Handle authentication or authorization\
-    *Extra points if implemented; even more if OAuth.*
+Detalhes, exemplos de curl/Postman e formatos estão em [API_DOCUMENTATION.md](API_DOCUMENTATION.md).
 
-2.  Document the API\
-    *Optional --- but earns extra points.*
+## Variáveis de ambiente úteis
+- `ConnectionStrings__PostgresConnection`: connection string do PostgreSQL
+- `ASPNETCORE_ENVIRONMENT`: `Development`, `Production` ou `Test`
 
-## CNAB Documentation
+## Troubleshooting rápido
+- Porta 5000 ocupada: ajuste `ASPNETCORE_URLS` ou mapeamento no docker-compose.
+- Banco não sobe: verifique se a porta 5432 está livre; use `docker-compose logs postgres`.
+- Swagger não carrega: confirme que a API está em execução e acessando `/swagger`.
+- Testes de integração: garantem uso de banco InMemory quando `ASPNETCORE_ENVIRONMENT=Test`.
 
-| Field        | Start | End | Size | Description                                 |
-|--------------|:-----:|:---:|:----:|---------------------------------------------|
-| Type         | 1     | 1   | 1    | Transaction type                             |
-| Date         | 2     | 9   | 8    | Date of occurrence                           |
-| Value        | 10    | 19  | 10   | Transaction amount (divide by 100.00)        |
-| CPF          | 20    | 30  | 11   | Beneficiary's CPF                            |
-| Card         | 31    | 42  | 12   | Card used in the transaction                 |
-| Time         | 43    | 48  | 6    | Time of occurrence (UTC-3)                   |
-| Store Owner  | 49    | 62  | 14   | Store representative name                    |
-| Store Name   | 63    | 81  | 19   | Store name                                   |
+## Estrutura de pastas (essencial)
+- backend/ — API ASP.NET Core + EF Core
+- backend.IntegrationTests/ — testes de integração
+- frontend/ — app React (upload/consulta)
+- API_DOCUMENTATION.md — referência completa da API
 
-## Transaction Types
-
-| Type | Description    | Nature  | Sign |
-|------|----------------|---------|------|
-| 1    | Debit          | Income  | +    |
-| 2    | Boleto         | Expense | -    |
-| 3    | Financing      | Expense | -    |
-| 4    | Credit         | Income  | +    |
-| 5    | Loan Receipt   | Income  | +    |
-| 6    | Sales          | Income  | +    |
-| 7    | TED Receipt    | Income  | +    |
-| 8    | DOC Receipt    | Income  | +    |
-| 9    | Rent           | Expense | -    |
-
-
-## Evaluation Criteria
-
-Your project will be evaluated based on:
-
-1.  Whether your application meets the basic requirements
-2.  Documentation on environment setup and application execution
-3.  Whether you followed the challenge submission instructions
-4.  Quality and coverage of automated tests
-
-We will also assess:
-
--   Your familiarity with standard libraries
--   Your experience with object-oriented programming
--   The structure and maintainability of your project
-
-## Good luck!
+## Licença
+Uso interno para o desafio técnico.

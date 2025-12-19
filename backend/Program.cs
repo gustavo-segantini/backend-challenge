@@ -1,16 +1,21 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Text;
+using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
 using CnabApi.Data;
+using CnabApi.Data.Seed;
 using CnabApi.Services;
+using CnabApi.Services.Auth;
 using CnabApi.Middleware;
+using CnabApi.Options;
+using CnabApi.Models;
 
-var builder = WebApplication.CreateBuilder(new WebApplicationOptions
-{
-    ContentRootPath = AppContext.BaseDirectory,
-    WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot")
-});
+var builder = WebApplication.CreateBuilder(args);
 
 // Add services
 builder.Services.AddControllers();
@@ -47,6 +52,25 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Options bindings
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+builder.Services.Configure<GitHubOAuthOptions>(builder.Configuration.GetSection("GitHubOAuth"));
+
+var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
+if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey) || jwtOptions.SigningKey.Length < 32)
+{
+    // Fallback for local/dev; should be overridden via environment variable JWT_SIGNING_KEY
+    jwtOptions.SigningKey = builder.Configuration["JWT_SIGNING_KEY"]
+        ?? "dev-signing-key-change-me-32-characters-minimum!!";
+}
+builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(jwtOptions));
+
+builder.Services.AddHttpClient("GitHubOAuth", client =>
+{
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("cnab-api-auth");
+    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+});
+
 // Add DbContext - Use InMemory for Test environment, PostgreSQL for others
 if (builder.Environment.EnvironmentName == "Test")
 {
@@ -68,6 +92,33 @@ builder.Services.AddScoped<ICnabParserService, CnabParserService>();
 builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<ICnabUploadService, CnabUploadService>();
+builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = signingKey,
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidIssuer = jwtOptions.Issuer,
+        ValidAudience = jwtOptions.Audience,
+        ClockSkew = TimeSpan.FromMinutes(1)
+    };
+});
+
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -84,29 +135,20 @@ app.UseStaticFiles();
 app.UseHttpsRedirection();
 app.UseCors("ReactPolicy");
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 // Map controllers - must be before app.Run()
 app.MapControllers();
 
 // Run migrations on startup (only if database is available and not in Test environment)
-if (app.Environment.EnvironmentName != "Test")
+try
 {
-    try
-    {
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<CnabDbContext>();
-        // Suppress the pending model changes warning for migrations
-        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
-            .CreateLogger("Migrations");
-
-        logger.LogWarning("Checking for pending migrations...");
-        await db.Database.MigrateAsync();
-        logger.LogInformation("Migrations completed successfully");
-    }
-    catch (Exception ex)
-    {
-        // Don't fail startup if migrations error - allow app to run
-        Console.WriteLine($"Migration note: {ex.Message}");
-    }
+    await DataSeeder.SeedAsync(app.Services);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Migration/Seed note: {ex.Message}");
 }
 
 app.Run();

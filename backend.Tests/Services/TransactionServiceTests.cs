@@ -4,6 +4,8 @@ using CnabApi.Models;
 using CnabApi.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Moq;
 
 namespace CnabApi.Tests.Services;
 
@@ -23,7 +25,8 @@ public class TransactionServiceTests : IDisposable
             .Options;
 
         _context = new CnabDbContext(options);
-        _transactionService = new TransactionService(_context);
+        var cacheMock = new Mock<IDistributedCache>();
+        _transactionService = new TransactionService(_context, cacheMock.Object);
     }
 
     public void Dispose()

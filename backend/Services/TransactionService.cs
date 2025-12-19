@@ -18,7 +18,6 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
     private readonly CnabDbContext _context = context;
     private readonly IDistributedCache _cache = cache;
 
-    private const string TransactionsCacheKeyPrefix = "transactions:";
     private const string BalanceCacheKeyPrefix = "balance:";
     private const int CacheExpirationMinutes = 30;
 
@@ -65,17 +64,6 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
             if (options.Page <= 0 || options.PageSize <= 0)
                 return Result<PagedResult<Transaction>>.Failure("Parâmetros de paginação inválidos.");
 
-            // Try to get from cache
-            var cacheKey = GenerateCacheKey(options);
-            var cachedResult = await _cache.GetStringAsync(cacheKey, cancellationToken);
-
-            if (!string.IsNullOrEmpty(cachedResult))
-            {
-                var deserialized = JsonSerializer.Deserialize<PagedResult<Transaction>>(cachedResult);
-                if (deserialized != null)
-                    return Result<PagedResult<Transaction>>.Success(deserialized);
-            }
-
             var query = BuildTransactionQuery(options);
 
             var totalCount = await query.CountAsync(cancellationToken);
@@ -92,13 +80,6 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
                 Page = options.Page,
                 PageSize = options.PageSize
             };
-
-            // Cache the result
-            var cacheOptions = new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(CacheExpirationMinutes)
-            };
-            await _cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(paged), cacheOptions, cancellationToken);
 
             return Result<PagedResult<Transaction>>.Success(paged);
         }
@@ -261,17 +242,6 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
             : query.OrderByDescending(t => t.TransactionDate).ThenByDescending(t => t.TransactionTime);
 
         return query;
-    }
-
-    /// <summary>
-    /// Helper method to generate cache key for transaction queries.
-    /// </summary>
-    private static string GenerateCacheKey(TransactionQueryOptions options)
-    {
-        return $"{TransactionsCacheKeyPrefix}{options.Cpf}:p{options.Page}:ps{options.PageSize}:" +
-               $"s{options.StartDate?.Date:yyyyMMdd}:e{options.EndDate?.Date:yyyyMMdd}:" +
-               $"n{string.Join(",", options.NatureCodes ?? new List<string>())}:" +
-               $"d{options.SortDirection}";
     }
 
     /// <summary>

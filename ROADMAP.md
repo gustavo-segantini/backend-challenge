@@ -1,8 +1,8 @@
 # Development Roadmap
 
-## Current Status: ✅ MVP Complete
+## Current Status: ✅ MVP + Auth
 
-The application has all essential features implemented and is ready for deployment and further development.
+MVP funcional com auth (JWT + refresh + GitHub OAuth), backend protegido e frontend com login.
 
 ---
 
@@ -28,37 +28,28 @@ The application has all essential features implemented and is ready for deployme
 
 ## Phase 2: Enhancement Features (Next Priority)
 
-### Authentication & Authorization 🔐
-**Estimated**: 2-3 days
-- [ ] Implement JWT authentication
-- [ ] Add user registration/login
-- [ ] Protect API endpoints with authorization
-- [ ] User roles (Admin, Store Manager)
-- [ ] Implement refresh token strategy
+### API UX: Swagger & Docs 📖
+- [ ] Enriquecer descrições e exemplos no Swagger
+- [ ] API_DOCUMENTATION com requests/responses e códigos de erro
 
-**Benefits**: 
-- Multi-user support
-- Data isolation per user
-- Audit trail for changes
-- Extra points in evaluation
+### Query & Escalabilidade 🔍
+- [ ] Paginação e ordenação no GET por CPF
+- [ ] Filtros (data, tipo) documentados
+- [ ] Índices em CPF/Data/Tipo
+
+### Qualidade & Observabilidade 🔐
+- [ ] FluentValidation (CPF real) e respostas ProblemDetails
+- [ ] Logging estruturado (Serilog) + correlação
+- [ ] Telemetria (App Insights opcional)
+- [ ] Versionamento de API (v1)
+
+### Performance ⚡
+- [ ] Caching (IMemoryCache) para consultas frequentes
+- [ ] Otimizações de banco (índices adicionais, análise de planos)
 
 ### Advanced Filtering & Search 🔍
-**Estimated**: 1-2 days
-- [ ] Filter transactions by date range
-- [ ] Filter transactions by type
-- [ ] Search transactions by store name
-- [ ] Filter transactions by amount range
-- [ ] Export transactions to CSV/Excel
-
-**Frontend Changes**:
-- Add filter component
-- Add search bar
-- Add date range picker
-
-**Backend Changes**:
-- Add query parameters to GET /transactions
-- Implement dynamic filtering in service layer
-- Add export endpoint
+*(parte alinhada com Query & Escalabilidade acima; export permanece opcional)*
+- [ ] Export transactions to CSV/Excel (opcional)
 
 ### File History & Management 📋
 **Estimated**: 1 day
@@ -81,23 +72,14 @@ The application has all essential features implemented and is ready for deployme
 - [ ] Email notifications on completion
 
 ### Dashboard & Analytics 📊
-**Estimated**: 2-3 days
-- [ ] Summary cards (total transactions, total balance, stores count)
-- [ ] Charts for transaction trends
-- [ ] Charts for income vs expense
-- [ ] Store performance comparison
-- [ ] Monthly/yearly revenue reports
+- (posterior ao pacote de qualidade/performance)
 
 **Libraries to Consider**:
 - Chart.js or Recharts for visualizations
 - date-fns for date manipulation
 
 ### Data Reconciliation ✓
-**Estimated**: 1-2 days
-- [ ] Duplicate detection
-- [ ] Transaction validation
-- [ ] Reconciliation reports
-- [ ] Discrepancy alerts
+- (posterior; depende de validações avançadas)
 
 ---
 
@@ -173,16 +155,15 @@ dotnet test backend/Tests/CnabApi.Tests.csproj
 
 ---
 
-## Known Limitations & Tech Debt
+### Known Limitations & Tech Debt
 
 ### Current Implementation
-1. **No Authentication**: Anyone can upload/view data
-2. **In-Memory Tests**: No real database tests
-3. **No Pagination**: All transactions loaded at once
-4. **No Caching**: Fresh queries on every request
-5. **Basic Error Handling**: Could be more granular
-6. **Limited Validation**: File format validation only
-7. **No Logging**: Minimal logging implementation
+1. **Docs**: README/API docs incompletos; Swagger sem exemplos ricos
+2. **Paginação/Filtros**: Ausentes nas consultas
+3. **Caching/Performance**: Não há cache ou tuning de índices
+4. **Erro/Validação**: Falta FluentValidation/ProblemDetails; CPF válido não checado
+5. **Logging/Observabilidade**: Logs básicos, sem correlação/telemetria
+6. **Versionamento**: API sem versão explícita
 
 ### To Address
 - [ ] Add comprehensive error logging

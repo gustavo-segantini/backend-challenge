@@ -5,32 +5,31 @@
 ### ✅ O que FOI implementado (MVP Completo)
 
 #### Backend (.NET 9 + ASP.NET Core)
-- ✅ **Modelo de dados completo**: Transaction com todos os campos CNAB
-- ✅ **Parser CNAB**: Validação e parsing de arquivos com 8 campos fixos
-- ✅ **Services Layer**: 4 services (Parser, File, Transaction, Upload)
-- ✅ **Controllers**: TransactionsController com 4 endpoints
-- ✅ **Database**: PostgreSQL com EF Core + Migrations
-- ✅ **Middleware**: ExceptionHandlingMiddleware para erros globais
-- ✅ **Result Pattern**: Tratamento de erros sem exceptions
-- ✅ **Docker**: Configurado com docker-compose
-- ✅ **CORS**: Configurado para frontend React
+### ✅ O que FOI implementado (MVP + Auth)
 
+ ✅ **Modelo de dados completo**: Transaction com todos os campos CNAB
+ ✅ **Parser CNAB**: Validação e parsing de arquivos com 8 campos fixos
+ ✅ **Services Layer**: Parser, File, Transaction, Upload, Auth (JWT + refresh + GitHub OAuth)
+ ✅ **Controllers**: TransactionsController (protegido) e AuthController
+ ✅ **Database**: PostgreSQL com EF Core + Migrations (inclui Users/RefreshTokens) + seeding de admin
+ ✅ **Middleware**: ExceptionHandlingMiddleware para erros globais
+ ✅ **Result Pattern**: Tratamento de erros sem exceptions
+ ✅ **Docker**: Configurado com docker-compose (vars de JWT/OAuth)
+ ✅ **CORS**: Configurado para frontend React
 #### Frontend (React)
-- ✅ **Upload de arquivos**: Interface para upload CNAB
-- ✅ **Consulta por CPF**: Busca de transações
-- ✅ **Visualização**: Lista de transações com tipos
-- ✅ **Cálculo de saldo**: Exibição do balance
-- ✅ **Docker**: Container separado para desenvolvimento
+#### Frontend (React)
+ ✅ **Upload de arquivos**: Interface para upload CNAB
+ ✅ **Consulta por CPF**: Busca de transações
+ ✅ **Visualização**: Lista de transações com tipos
+ ✅ **Cálculo de saldo**: Exibição do balance
+ ✅ **Autenticação**: Login com credenciais e GitHub; tokens armazenados e usados nas chamadas
+ ✅ **Docker**: Container separado para desenvolvimento
 
 #### Testes
-- ✅ **121 testes unitários** cobrindo:
-  - 17 testes - Transaction (Model)
-  - 32 testes - CnabParserService
-  - 16 testes - FileService
-  - 30 testes - TransactionService
-  - 11 testes - CnabUploadService
-  - 16 testes - TransactionsController
-- ✅ **Code Coverage**: Configurado com exclusão de Migrations/Program.cs
+ ✅ **Unidade**: Suites para parser, serviços, controllers (inclui AuthController)
+ ✅ **Integração**: TransactionsController com DB in-memory isolado por teste
+ ✅ **Code Coverage**: Configurado com exclusão de Migrations/Program.cs
+ ✅ **Stack**: xUnit + Moq + FluentAssertions
 - ✅ **xUnit + Moq + FluentAssertions**: Stack completa
 
 #### DevOps
@@ -48,100 +47,60 @@
 
 ### Oportunidades de Pontos Extra
 1. ❌ **Autenticação/Autorização** (OAuth = mais pontos)
+### ❌ Gap Analysis atualizada
+
+### Requisitos obrigatórios faltantes
+1. ❌ **README completo** (setup, uso, troubleshooting)
+2. ❌ **Instruções detalhadas da API** (API_DOCUMENTATION + exemplos Swagger)
+
+### Próximas entregas priorizadas (pedido do usuário)
+1. 🔜 **Swagger**: enriquecer descrições e exemplos
+2. 🔜 **Paginação/filtros/ordenação + índices** nas queries de transações
+3. 🔜 **Logging estruturado/telemetria + validações avançadas (CPF real via FluentValidation) + ProblemDetails**
+4. 🔜 **Performance**: caching, otimizações de banco, versionamento de API
+
+### Oportunidades adicionais
+- ❌ **Testes E2E**
+- ❌ **Dashboard/analytics**
+- ❌ **Histórico de imports / batch / export**
 2. ❌ **Documentação da API** (extra points)
 3. ❌ **CSS framework não popular** (frontend usa CSS puro ✅)
 
-### Melhorias Técnicas Identificadas
-1. ❌ **Paginação**: Todos os dados carregados de uma vez
-2. ❌ **Logging estruturado**: Apenas logs básicos
-3. ❌ **Validações avançadas**: Apenas validações básicas de formato
-4. ❌ **Testes de Integração**: Apenas testes unitários
-5. ❌ **Testes E2E**: Não implementados
-6. ❌ **Performance**: Sem otimizações (índices, caching)
-7. ❌ **Filtros avançados**: Apenas busca por CPF
-8. ❌ **Histórico de imports**: Não rastreia arquivos importados
+### **SPRINT 1: Documentação & Swagger** (curto prazo)
+**Objetivo**: Fechar requisitos obrigatórios e preparar DX.
 
----
-
-## 🎯 Plano de Execução Priorizado
-
-### **SPRINT 1: Documentação & Finalização MVP** (2-3 dias) 🔥 CRÍTICO
-**Objetivo**: Completar requisitos obrigatórios para submissão
-
-#### Dia 1: Documentação Completa
+- [ ] README.md completo (setup, uso, testes, compose, env vars, troubleshooting)
+- [ ] API_DOCUMENTATION.md com exemplos de request/response e códigos de erro
+- [ ] Swagger enriquecido: descrições, exemplos, XML doc nos modelos/controladores
 - [ ] **README.md detalhado** com:
-  - Descrição do projeto e arquitetura
-  - Pré-requisitos (Docker, .NET 9)
-  - Instruções de setup passo a passo (Windows/Linux/Mac)
-  - Como executar os testes
-  - Como acessar a aplicação
-  - Troubleshooting comum
-- [ ] **API_DOCUMENTATION.md** com:
-  - Descrição de todos os endpoints
-  - Request/Response examples
-  - Códigos de erro
-  - Como testar com curl/Postman
-- [ ] **Melhorar Swagger UI**:
-  - Adicionar XML documentation nos controllers
+### **SPRINT 2: API UX e Query** (médio prazo)
+**Objetivo**: Melhorar consumo e escalabilidade das consultas.**
+
+- [ ] Paginação, filtros (data, tipo), ordenação no GET por CPF
+- [ ] Índices em CPF/Data/Tipo
+- [ ] Documentar parâmetros e exemplos no Swagger/API docs
   - Configurar Swagger para mostrar exemplos
   - Adicionar descrições nos modelos
 
-**Entrega**: Documentação completa e profissional
-
----
-
-#### Dia 2-3: Testes de Integração
-- [ ] **Setup de testes de integração**:
-  - WebApplicationFactory para testes de API
-  - TestContainers ou PostgreSQL em memória
-- [ ] **Testes de fluxo completo**:
-  - Upload → Parse → Save → Query (sucesso)
-  - Upload com arquivo inválido
-  - Query com CPF inexistente
-  - Clear data e verificação
-- [ ] **Code Coverage**:
   - Aumentar para > 80%
-  - Adicionar badge no README
-
-**Entrega**: Suite de testes robusta + coverage > 80%
-
----
-
-### **SPRINT 2: Autenticação & Autorização** (3-4 dias) 🌟 EXTRA POINTS
 **Objetivo**: Implementar auth para ganhar pontos extras
 
-#### Fase 1: JWT Authentication (2 dias)
+
+- [ ] Logging estruturado (Serilog) + correlação
+- [ ] Telemetria (Application Insights opcional)
+- [ ] FluentValidation (CPF real, inputs) + ProblemDetails nas respostas
+- [ ] Versionamento de API (v1) documentado
 - [ ] **Backend**:
   - Adicionar Microsoft.AspNetCore.Authentication.JwtBearer
   - Criar AuthController (Register, Login, Refresh)
-  - Criar modelo User (Id, Username, PasswordHash, Role)
-  - Implementar geração e validação de JWT tokens
-  - Proteger endpoints com [Authorize]
-  - Implementar refresh token strategy
-- [ ] **Frontend**:
-  - Tela de login/registro
-  - Armazenar JWT no localStorage
-  - Interceptor para adicionar token nas requests
   - Redirect para login quando não autenticado
-  - Logout
-
-**Entrega**: Sistema de autenticação funcional
-
-#### Fase 2: OAuth 2.0 (1-2 dias) - MÁXIMO PONTOS
-- [ ] **Implementar OAuth com Google**:
-  - Configurar Google OAuth Client
-  - Adicionar botão "Login com Google"
   - Integrar com backend
-- [ ] **Alternativa**: GitHub OAuth ou Microsoft
-
-**Entrega**: Login social funcionando = +++ pontos
-
----
-
-### **SPRINT 3: Features Essenciais** (3-4 dias) ⚡
 **Objetivo**: Melhorar usabilidade e performance
 
-#### Fase 1: Paginação (1 dia)
+
+- [ ] Caching (IMemoryCache) para consultas frequentes
+- [ ] Otimizações de banco (índices adicionais, análise de planos)
+- [ ] Estratégia de invalidação para saldo/consultas
 - [ ] **Backend**:
   - Adicionar PagedResult<T> com metadata (totalCount, pageSize, currentPage)
   - Modificar GetTransactionsByCpf para aceitar ?page=1&pageSize=20

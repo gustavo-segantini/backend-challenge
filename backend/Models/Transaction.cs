@@ -9,6 +9,35 @@ namespace CnabApi.Models;
 public class Transaction
 {
     /// <summary>
+    /// Static lookup dictionaries for transaction codes to improve performance and testability.
+    /// </summary>
+    private static readonly Dictionary<string, string> NatureDescriptions = new()
+    {
+        { "1", "Debit" },
+        { "2", "Boleto" },
+        { "3", "Financing" },
+        { "4", "Credit" },
+        { "5", "Loan Receipt" },
+        { "6", "Sales" },
+        { "7", "TED Receipt" },
+        { "8", "DOC Receipt" },
+        { "9", "Rent" }
+    };
+
+    private static readonly Dictionary<string, string> NatureClassifications = new()
+    {
+        { "1", "Income" },
+        { "2", "Expense" },
+        { "3", "Expense" },
+        { "4", "Income" },
+        { "5", "Income" },
+        { "6", "Income" },
+        { "7", "Income" },
+        { "8", "Income" },
+        { "9", "Expense" }
+    };
+
+    /// <summary>
     /// Unique identifier for the transaction record.
     /// </summary>
     public int Id { get; set; }
@@ -85,26 +114,11 @@ public class Transaction
     /// </summary>
     public decimal SignedAmount => GetSignedAmount();
 
-    private string GetTransactionDescription() => NatureCode switch
-    {
-        "1" => "Debit",
-        "2" => "Boleto",
-        "3" => "Financing",
-        "4" => "Credit",
-        "5" => "Loan Receipt",
-        "6" => "Sales",
-        "7" => "TED Receipt",
-        "8" => "DOC Receipt",
-        "9" => "Rent",
-        _ => "Transaction"
-    };
+    private string GetTransactionDescription() =>
+        NatureDescriptions.TryGetValue(NatureCode, out var description) ? description : "Transaction";
 
-    private string GetTransactionNature() => NatureCode switch
-    {
-        "1" or "4" or "5" or "6" or "7" or "8" => "Income",
-        "2" or "3" or "9" => "Expense",
-        _ => "Neutral"
-    };
+    private string GetTransactionNature() =>
+        NatureClassifications.TryGetValue(NatureCode, out var nature) ? nature : "Neutral";
 
     private decimal GetSignedAmount() => GetTransactionNature() switch
     {

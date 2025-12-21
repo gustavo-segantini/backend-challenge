@@ -2,6 +2,26 @@
 
 API e frontend para upload de arquivos CNAB, parsing, persistência em PostgreSQL e consulta de transações/saldo por CPF. Projeto empacotado com Docker Compose.
 
+## 🚀 Início Rápido
+
+**One-command setup** (Windows, macOS, Linux):
+
+### Windows
+```bash
+setup.bat
+```
+
+### macOS/Linux/WSL
+```bash
+bash setup.sh
+```
+
+**Depois acesse:** http://localhost:3000
+
+👉 Para instruções detalhadas, veja [GETTING_STARTED.md](GETTING_STARTED.md)
+
+---
+
 ## Visão Geral
 - Backend: ASP.NET Core 9 (C#), EF Core, PostgreSQL, Swagger/OpenAPI.
 - Frontend: React com formulário de upload e consultas.
@@ -17,13 +37,30 @@ Documentação completa dos endpoints: [API_DOCUMENTATION.md](API_DOCUMENTATION.
 - Middleware: tratamento global de erros (ExceptionHandlingMiddleware).
 
 ## Pré-requisitos
-- Docker e Docker Compose
-- .NET 9 SDK (para rodar localmente sem Docker)
-- Node 20+ (apenas se quiser rodar o frontend fora do Docker)
+
+**Mínimo (recomendado):**
+- Docker Desktop ([Download](https://www.docker.com/products/docker-desktop))
+
+**Opcional (desenvolvimento local):**
+- .NET 9 SDK
+- Node 20+
+- PostgreSQL 16
 
 ## Como rodar com Docker (recomendado)
-Na raiz do repositório:
 
+**Opção 1 - Setup automático (recomendado):**
+
+```bash
+# Windows
+setup.bat
+
+# macOS / Linux / WSL
+bash setup.sh
+```
+
+**Opção 2 - Comando manual:**
+
+Na raiz do repositório:
 ```bash
 docker-compose up --build
 ```
@@ -85,9 +122,17 @@ Detalhes, exemplos de curl/Postman e formatos estão em [API_DOCUMENTATION.md](A
 
 ## Estrutura de pastas (essencial)
 - backend/ — API ASP.NET Core + EF Core
+- backend.Tests/ — testes unitários
 - backend.IntegrationTests/ — testes de integração
 - frontend/ — app React (upload/consulta)
 - API_DOCUMENTATION.md — referência completa da API
+- GETTING_STARTED.md — guia passo-a-passo (recomendado ler primeiro!)
+
+## 📚 Documentação
+
+- [GETTING_STARTED.md](GETTING_STARTED.md) - **Comece aqui!** Instruções de setup e troubleshooting
+- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - Referência de endpoints da API
+- [ROADMAP.md](ROADMAP.md) - Plano de desenvolvimento e próximos passos
 
 ## Licença
 Uso interno para o desafio técnico.

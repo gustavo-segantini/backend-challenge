@@ -25,6 +25,11 @@ frontend/.env.*.local
 *.swp
 *.swo
 
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.production.local
 
 .serena/.gitignore
 .serena/project.yml

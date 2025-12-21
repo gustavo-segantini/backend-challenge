@@ -1,13 +1,11 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: cnab_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: cnab_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-cnab_db}
     ports:
       - "5432:5432"
     volumes:
@@ -20,6 +18,7 @@ services:
       retries: 5
     networks:
       - cnab_network
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -41,15 +40,16 @@ services:
       dockerfile: Dockerfile
     container_name: cnab_api
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__PostgresConnection: "Host=postgres;Port=5432;Database=cnab_db;Username=postgres;Password=postgres"
-      ConnectionStrings__RedisConnection: "redis:6379"
-      JWT_SIGNING_KEY: "Xn2Q8m5s7p9zA1c3e5g7j9L1N3R5T7V9Y2B4D6F8H0J2K4M6P8R0T2V4X6Z8Q0W2E4"
-      GitHubOAuth__ClientId: "Iv23lirnfLuKQukcTFif"
-      GitHubOAuth__ClientSecret: "bf7d8f93cb5f540475d7bae10afbda33f3edf3c2"
-      GitHubOAuth__CallbackUrl: "http://localhost:5000/api/auth/github/callback"
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: ${ASPNETCORE_URLS:-http://+:8080}
+      ConnectionStrings__PostgresConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cnab_db};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}"
+      ConnectionStrings__RedisConnection: "${REDIS_HOST:-redis}:${REDIS_PORT:-6379}"
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+      GitHubOAuth__ClientId: ${GitHubOAuth__ClientId}
+      GitHubOAuth__ClientSecret: ${GitHubOAuth__ClientSecret}
+      GitHubOAuth__CallbackUrl: ${GitHubOAuth__CallbackUrl:-http://localhost:5000/api/auth/github/callback}
     ports:
-      - "5000:8080"
+      - "${API_PORT:-5000}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,9 +65,9 @@ services:
       dockerfile: Dockerfile
     container_name: cnab_frontend
     environment:
-      REACT_APP_API_URL: http://localhost:5000/api
+      REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:5000/api}
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - api
     networks:

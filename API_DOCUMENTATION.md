@@ -656,17 +656,76 @@ Current implementation has no rate limiting. Recommended practices:
 
 ---
 
+## Testes e Qualidade
+
+### Code Coverage
+
+O projeto mantém alta cobertura de testes para garantir qualidade e confiabilidade:
+
+| Métrica | Valor | Status |
+|---------|-------|--------|
+| **Line Coverage** | 86.7% | ✅ Excelente |
+| **Branch Coverage** | 77.27% | ✅ Muito Bom |
+| **Method Coverage** | 90.5% | ✅ Excelente |
+| **Total de Testes** | 268 | - |
+
+### Executar Testes
+
+```bash
+# Todos os testes
+dotnet test
+
+# Apenas unitários
+dotnet test backend.Tests/CnabApi.Tests.csproj
+
+# Apenas integração
+dotnet test backend.IntegrationTests/CnabApi.IntegrationTests.csproj
+```
+
+### Gerar Relatório de Cobertura
+
+```bash
+# 1. Executar testes com cobertura
+dotnet test backend.Tests/CnabApi.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+
+# 2. Gerar relatório HTML (requer reportgenerator)
+reportgenerator -reports:backend.Tests/coverage.cobertura.xml -targetdir:backend.Tests/TestResults/CoverageReport -reporttypes:Html
+
+# 3. Visualizar relatório
+start backend.Tests/TestResults/CoverageReport/index.html  # Windows
+```
+
+### Instalar ReportGenerator
+
+```bash
+dotnet tool install -g dotnet-reportgenerator-globaltool
+```
+
+### Exclusões de Coverage
+
+Código de infraestrutura excluído da cobertura (marcado com `[ExcludeFromCodeCoverage]`):
+- ✅ Migrations do Entity Framework Core
+- ✅ Program.cs (configuração de startup)
+- ✅ Extensions de configuração (DI, Middleware, HealthChecks)
+- ✅ DataSeeder (dados iniciais)
+- ✅ Middleware global de exceções
+
+Isso garante que as métricas refletem apenas **código de negócio testável**.
+
+---
+
 ## Versioning
 
 **Current Version:** 1.0.0
 
 **Changelog:**
-- v1.0.0 (2025-12-19): Initial release
+- v1.0.0 (2025-12-21): Initial release
   - CNAB file upload
   - Transaction query by CPF
   - Balance calculation
   - Data clearing functionality
   - Store information support
+  - 86.7% test coverage (268 tests)
 
 ---
 
@@ -676,4 +735,4 @@ For questions, bug reports, or feature requests, please contact the development 
 
 ---
 
-*Last Updated: December 19, 2025*
+*Last Updated: December 21, 2025*

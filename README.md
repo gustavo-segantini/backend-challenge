@@ -1,8 +1,8 @@
 # 🏦 CNAB Parser API - Backend Challenge
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
-[![Tests](https://img.shields.io/badge/tests-175%20passing-brightgreen)](https://github.com)
-[![Coverage](https://img.shields.io/badge/coverage-%3E80%25-green)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-268%20passing-brightgreen)](https://github.com)
+[![Coverage](https://img.shields.io/badge/coverage-86.7%25-brightgreen)](https://github.com)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Uma API robusta, production-ready para processamento e análise de arquivos CNAB com autenticação JWT, OAuth GitHub, e recursos enterprise como logging estruturado, validação robusta e testes abrangentes.
@@ -29,7 +29,7 @@ Uma API robusta, production-ready para processamento e análise de arquivos CNAB
 ✅ **Paginação, filtros e ordenação** em consultas de transações  
 ✅ **Logging estruturado** com correlation ID end-to-end (Serilog)  
 ✅ **Validação robusta** com FluentValidation (CPF real, credenciais)  
-✅ **Testes abrangentes** (175 testes: unitários + integração)  
+✅ **Testes abrangentes** (268 testes com 86.7% de cobertura)  
 ✅ **Docker Compose** para desenvolvimento e produção  
 ✅ **Application Insights** pronto para telemetria em produção  
 ✅ **ProblemDetails RFC 7807** para respostas HTTP padronizadas  
@@ -177,6 +177,8 @@ Frontend fica em: http://localhost:3000
 
 ## Testes
 
+### Executar Testes
+
 ```bash
 # Todos os testes
 dotnet test
@@ -186,10 +188,46 @@ dotnet test backend.Tests/CnabApi.Tests.csproj
 
 # Apenas integração
 dotnet test backend.IntegrationTests/CnabApi.IntegrationTests.csproj
-
-# Com coverage
-dotnet test /p:CollectCoverage=true /p:CoverageFormat=opencover
 ```
+
+### Code Coverage
+
+O projeto tem **86.7% de cobertura de linha**, **77.27% de branch** e **90.5% de métodos** (268 testes).
+
+#### Gerar Relatório de Coverage
+
+```bash
+# 1. Executar testes com cobertura (gera coverage.cobertura.xml)
+dotnet test backend.Tests/CnabApi.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+
+# 2. Gerar relatório HTML (requer reportgenerator)
+reportgenerator -reports:backend.Tests/coverage.cobertura.xml -targetdir:backend.Tests/TestResults/CoverageReport -reporttypes:Html
+
+# 3. Abrir relatório no navegador
+# Windows
+start backend.Tests/TestResults/CoverageReport/index.html
+# macOS
+open backend.Tests/TestResults/CoverageReport/index.html
+# Linux
+xdg-open backend.Tests/TestResults/CoverageReport/index.html
+```
+
+#### Instalar ReportGenerator (primeira vez)
+
+```bash
+dotnet tool install -g dotnet-reportgenerator-globaltool
+```
+
+#### O que está excluído da cobertura
+
+Código de infraestrutura marcado com `[ExcludeFromCodeCoverage]`:
+- ✅ Migrations do EF Core
+- ✅ Program.cs (configuração de startup)
+- ✅ Extensions de configuração (ServiceCollection, Middleware, HealthChecks)
+- ✅ DataSeeder
+- ✅ Middleware de exceções
+
+Isso garante que a cobertura reflete apenas **código de negócio testável**.
 
 ## Endpoints Principais
 
@@ -298,8 +336,8 @@ backend-challenge/
 └── SETUP_VERIFICATION.md       # Checklist de verificação
 ```
 
-**Total de testes**: 175 (xUnit + Moq)  
-**Cobertura**: CursorPaginationHelper (18), AuthService (23), + testes existentes
+**Total de testes**: 268 (xUnit + Moq)  
+**Cobertura**: 86.7% linha, 77.27% branch, 90.5% métodos
 
 ## 📚 Documentação
 

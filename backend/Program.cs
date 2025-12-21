@@ -65,7 +65,7 @@ try
     app.UseHttpsRedirection();
     app.UseCors("ReactPolicy");
     app.UseAuthenticationConfiguration();
-    app.UseHealthChecks("/api/v1/health");
+    app.MapHealthChecksEndpoints();
     app.UsePrometheusMetrics();
     app.MapControllers();
 

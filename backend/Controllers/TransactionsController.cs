@@ -9,7 +9,8 @@ namespace CnabApi.Controllers;
 /// API controller for managing CNAB file uploads and transaction queries.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/v1/[controller]")]
+[ApiVersion("1.0")]
 public class TransactionsController(
     ICnabUploadService uploadService,
     ITransactionService transactionService,
@@ -32,16 +33,32 @@ public class TransactionsController(
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UploadCnabFile(IFormFile file, CancellationToken cancellationToken)
     {
-        var result = await _uploadService.ProcessCnabUploadAsync(file, cancellationToken);
+        _logger.LogInformation("Starting CNAB file upload process. File: {FileName}, Size: {FileSize} bytes", 
+            file?.FileName, file?.Length);
 
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.ErrorMessage });
-
-        return Ok(new
+        try
         {
-            message = $"Successfully imported {result.Data} transactions",
-            count = result.Data
-        });
+            var result = await _uploadService.ProcessCnabUploadAsync(file, cancellationToken);
+
+            if (!result.IsSuccess)
+            {
+                _logger.LogWarning("CNAB file upload failed. Error: {Error}", result.ErrorMessage);
+                return BadRequest(new { error = result.ErrorMessage });
+            }
+
+            _logger.LogInformation("CNAB file upload completed successfully. Transactions imported: {Count}", result.Data);
+
+            return Ok(new
+            {
+                message = $"Successfully imported {result.Data} transactions",
+                count = result.Data
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during CNAB file upload");
+            throw;
+        }
     }
 
     /// <summary>
@@ -69,27 +86,44 @@ public class TransactionsController(
         [FromQuery] string sort = "desc",
         CancellationToken cancellationToken = default)
     {
-        var natureCodes = string.IsNullOrWhiteSpace(types)
-            ? new List<string>()
-            : types.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        _logger.LogInformation("Retrieving transactions for CPF: {Cpf}. Page: {Page}, PageSize: {PageSize}, StartDate: {StartDate}, EndDate: {EndDate}, Types: {Types}",
+            cpf, page, pageSize, startDate, endDate, types);
 
-        var queryOptions = new TransactionQueryOptions
+        try
         {
-            Cpf = cpf,
-            Page = page,
-            PageSize = pageSize,
-            StartDate = startDate,
-            EndDate = endDate,
-            NatureCodes = natureCodes,
-            SortDirection = sort
-        };
+            var natureCodes = string.IsNullOrWhiteSpace(types)
+                ? new List<string>()
+                : types.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
-        var result = await _transactionService.GetTransactionsByCpfAsync(queryOptions, cancellationToken);
-        
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.ErrorMessage });
+            var queryOptions = new TransactionQueryOptions
+            {
+                Cpf = cpf,
+                Page = page,
+                PageSize = pageSize,
+                StartDate = startDate,
+                EndDate = endDate,
+                NatureCodes = natureCodes,
+                SortDirection = sort
+            };
 
-        return Ok(result.Data);
+            var result = await _transactionService.GetTransactionsByCpfAsync(queryOptions, cancellationToken);
+            
+            if (!result.IsSuccess)
+            {
+                _logger.LogWarning("Failed to retrieve transactions for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
+                return BadRequest(new { error = result.ErrorMessage });
+            }
+
+            _logger.LogInformation("Successfully retrieved transactions for CPF: {Cpf}. Count: {Count}, TotalCount: {TotalCount}",
+                cpf, result.Data?.Items.Count, result.Data?.TotalCount);
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error retrieving transactions for CPF: {Cpf}", cpf);
+            throw;
+        }
     }
 
     /// <summary>
@@ -103,12 +137,27 @@ public class TransactionsController(
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<object>> GetBalance(string cpf, CancellationToken cancellationToken)
     {
-        var result = await _transactionService.GetBalanceByCpfAsync(cpf, cancellationToken);
-        
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.ErrorMessage });
+        _logger.LogInformation("Calculating balance for CPF: {Cpf}", cpf);
 
-        return Ok(new { balance = result.Data });
+        try
+        {
+            var result = await _transactionService.GetBalanceByCpfAsync(cpf, cancellationToken);
+            
+            if (!result.IsSuccess)
+            {
+                _logger.LogWarning("Failed to calculate balance for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
+                return BadRequest(new { error = result.ErrorMessage });
+            }
+
+            _logger.LogInformation("Successfully calculated balance for CPF: {Cpf}. Balance: {Balance}", cpf, result.Data);
+
+            return Ok(new { balance = result.Data });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error calculating balance for CPF: {Cpf}", cpf);
+            throw;
+        }
     }
 
     /// <summary>
@@ -130,17 +179,34 @@ public class TransactionsController(
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        var result = await _transactionService.SearchTransactionsByDescriptionAsync(
-            cpf,
-            searchTerm,
-            page,
-            pageSize,
-            cancellationToken);
+        _logger.LogInformation("Searching transactions for CPF: {Cpf}. SearchTerm: {SearchTerm}, Page: {Page}, PageSize: {PageSize}",
+            cpf, searchTerm, page, pageSize);
 
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.ErrorMessage });
+        try
+        {
+            var result = await _transactionService.SearchTransactionsByDescriptionAsync(
+                cpf,
+                searchTerm,
+                page,
+                pageSize,
+                cancellationToken);
 
-        return Ok(result.Data);
+            if (!result.IsSuccess)
+            {
+                _logger.LogWarning("Search failed for CPF: {Cpf}, SearchTerm: {SearchTerm}. Error: {Error}", cpf, searchTerm, result.ErrorMessage);
+                return BadRequest(new { error = result.ErrorMessage });
+            }
+
+            _logger.LogInformation("Search completed for CPF: {Cpf}, SearchTerm: {SearchTerm}. Results: {Count}",
+                cpf, searchTerm, result.Data?.Items.Count);
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error searching transactions for CPF: {Cpf}, SearchTerm: {SearchTerm}", cpf, searchTerm);
+            throw;
+        }
     }
 
     /// <summary>
@@ -155,11 +221,26 @@ public class TransactionsController(
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ClearData(CancellationToken cancellationToken)
     {
-        var result = await _transactionService.ClearAllDataAsync(cancellationToken);
-        
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.ErrorMessage });
+        _logger.LogWarning("Admin initiated data clear operation");
 
-        return Ok(new { message = "All data cleared successfully" });
+        try
+        {
+            var result = await _transactionService.ClearAllDataAsync(cancellationToken);
+            
+            if (!result.IsSuccess)
+            {
+                _logger.LogError("Failed to clear data. Error: {Error}", result.ErrorMessage);
+                return BadRequest(new { error = result.ErrorMessage });
+            }
+
+            _logger.LogInformation("Data cleared successfully");
+
+            return Ok(new { message = "All data cleared successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during data clear operation");
+            throw;
+        }
     }
 }

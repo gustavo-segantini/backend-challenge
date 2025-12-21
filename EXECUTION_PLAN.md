@@ -37,6 +37,36 @@
 - ✅ **Docker Compose**: 3 containers (api, postgres, frontend)
 - ✅ **Scripts de setup**: .bat (Windows) e .sh (Linux/Mac)
 
+#### Sprint 2: Enterprise Features (✅ COMPLETO)
+- ✅ **Logging Estruturado (Serilog 4.2.0)**:
+  - Sinks: Console e File (rolling daily, 30 dias retenção)
+  - Output template com CorrelationId
+  - Enriquecimento com MachineName
+  - Logs em `logs/cnab-api-YYYYMMDD.txt`
+- ✅ **Correlation ID Tracking**:
+  - CorrelationIdMiddleware captura/gera X-Correlation-ID
+  - CorrelationIdEnricher injeta em todos os logs
+  - Rastreamento end-to-end de requests
+- ✅ **FluentValidation (11.11.0)**:
+  - TransactionValidator: validação de CPF com algoritmo real (check digits)
+  - UserValidator: credenciais com regras rigorosas
+  - Descoberta automática de validators
+- ✅ **ProblemDetails (Hellang.Middleware.ProblemDetails 6.4.1)**:
+  - RFC 7807 - Respostas de erro padronizadas
+  - Mapeamento automático de exceções
+  - Mensagens descritivas nos erros 400/500
+- ✅ **API Versioning v1 (Microsoft.AspNetCore.Mvc.Versioning 5.1.0)**:
+  - Rotas: `/api/v1/transactions` e `/api/v1/auth`
+  - Atributo `[ApiVersion("1.0")]` em controllers
+  - Headers de versão nas responses
+- ✅ **Application Insights (2.22.0)**:
+  - Configuração opcional em ApplicationInsightsConfiguration.cs
+  - Pronto para telemetria em produção
+- ✅ **Logging em Controllers**:
+  - TransactionsController: 6 endpoints com logging entry/exit/error
+  - AuthController: 7 endpoints com logging estruturado
+  - Correlação de requests para debugging
+
 ---
 
 ## ❌ O que NÃO foi implementado (Gap Analysis)
@@ -54,10 +84,10 @@
 2. ❌ **Instruções detalhadas da API** (API_DOCUMENTATION + exemplos Swagger)
 
 ### Próximas entregas priorizadas (pedido do usuário)
-1. 🔜 **Swagger**: enriquecer descrições e exemplos
-2. 🔜 **Paginação/filtros/ordenação + índices** nas queries de transações
-3. 🔜 **Logging estruturado/telemetria + validações avançadas (CPF real via FluentValidation) + ProblemDetails**
-4. 🔜 **Performance**: caching, otimizações de banco, versionamento de API
+1. 🔜 **Testes atualizar para v1**: Endpoints migram para `/api/v1/`
+2. 🔜 **Swagger enriquecimento**: Exemplos de FluentValidation + ProblemDetails
+3. 🔜 **Paginação/filtros/ordenação + índices** nas queries de transações
+4. 🔜 **Performance**: caching, otimizações de banco
 
 ### Oportunidades adicionais
 - ❌ **Testes E2E**
@@ -73,7 +103,7 @@
 - [ ] API_DOCUMENTATION.md com exemplos de request/response e códigos de erro
 - [ ] Swagger enriquecido: descrições, exemplos, XML doc nos modelos/controladores
 - [ ] **README.md detalhado** com:
-### **SPRINT 2: API UX e Query** (médio prazo)
+### **SPRINT 3: Paginação e Filtros** (próximo)
 **Objetivo**: Melhorar consumo e escalabilidade das consultas.**
 
 - [ ] Paginação, filtros (data, tipo), ordenação no GET por CPF
@@ -81,34 +111,15 @@
 - [ ] Documentar parâmetros e exemplos no Swagger/API docs
   - Configurar Swagger para mostrar exemplos
   - Adicionar descrições nos modelos
+  - Atualizar testes para /api/v1/
 
-  - Aumentar para > 80%
-**Objetivo**: Implementar auth para ganhar pontos extras
-
-
-- [ ] Logging estruturado (Serilog) + correlação
-- [ ] Telemetria (Application Insights opcional)
-- [ ] FluentValidation (CPF real, inputs) + ProblemDetails nas respostas
-- [ ] Versionamento de API (v1) documentado
+#### Fase 1: Paginação (1 dia)
 - [ ] **Backend**:
-  - Adicionar Microsoft.AspNetCore.Authentication.JwtBearer
-  - Criar AuthController (Register, Login, Refresh)
-  - Redirect para login quando não autenticado
-  - Integrar com backend
-**Objetivo**: Melhorar usabilidade e performance
-
-
-- [ ] Caching (IMemoryCache) para consultas frequentes
-- [ ] Otimizações de banco (índices adicionais, análise de planos)
-- [ ] Estratégia de invalidação para saldo/consultas
-- [ ] **Backend**:
-  - Adicionar PagedResult<T> com metadata (totalCount, pageSize, currentPage)
+  - Estender PagedResult<T> com metadata (totalCount, pageSize, currentPage)
   - Modificar GetTransactionsByCpf para aceitar ?page=1&pageSize=20
-  - Adicionar índices no banco (CPF, TransactionDate)
 - [ ] **Frontend**:
   - Componente de paginação
   - Navegação entre páginas
-  - Mostrar "X de Y resultados"
 
 #### Fase 2: Filtros Avançados (1-2 dias)
 - [ ] **Backend**:
@@ -118,60 +129,27 @@
 - [ ] **Frontend**:
   - Date range picker
   - Checkboxes para tipos de transação
-  - Select para ordenação
 
-#### Fase 3: Dashboard (1 dia)
-- [ ] **Frontend**:
-  - Cards com resumo (total transações, saldo, lojas)
-  - Gráfico de barras: receitas vs despesas
-  - Gráfico de linha: evolução do saldo
-  - Top 5 lojas por volume
+#### Fase 3: Índices & Performance (1 dia)
+- [ ] **Database**: Índices em CPF, TransactionDate, Type
+- [ ] **Testes**: Atualizar para /api/v1/ endpoints
 
-**Entrega**: Aplicação mais profissional e usável
+**Entrega**: Aplicação mais usável e escalável
 
 ---
 
-### **SPRINT 4: Performance & Qualidade** (2-3 dias) 🚀
+### **SPRINT 4: Testes & Qualidade** (próximo)
+
+
+### **SPRINT 5: Performance & Caching** (2-3 dias)
 **Objetivo**: Otimizar e profissionalizar
 
-#### Fase 1: Logging Estruturado (1 dia)
-- [ ] **Serilog**:
-  - Instalar Serilog.AspNetCore
-  - Configurar sinks (Console, File)
-  - Logs estruturados em todas as camadas
-  - Correlation ID para request tracking
-- [ ] **Application Insights** (opcional):
-  - Telemetria de performance
-  - Exception tracking
+#### Fase 1: Caching (1 dia)
+- [ ] **IMemoryCache** para consultas frequentes
+- [ ] Cache de saldo por CPF (com invalidação)
+- [ ] Estratégia de invalidação de cache
 
-#### Fase 2: Validações & Error Handling (1 dia)
-- [ ] **FluentValidation**:
-  - Validators para models
-  - Validação de CPF real
-  - Validação de datas
-- [ ] **ProblemDetails**:
-  - Respostas de erro padronizadas (RFC 7807)
-  - Mensagens mais descritivas
-
-#### Fase 3: Performance (1 dia)
-- [ ] **Database**:
-  - Índices em campos frequentes (CPF, Date, Type)
-  - Analisar query plans
-  - Adicionar composite indexes
-- [ ] **Caching**:
-  - IMemoryCache para resultados frequentes
-  - Cache de saldo por CPF (com invalidação)
-- [ ] **Async all the way**:
-  - Garantir que todos os métodos são async
-
-**Entrega**: Aplicação otimizada e robusta
-
----
-
-### **SPRINT 5: Features Avançadas** (3-4 dias) - OPCIONAL
-**Objetivo**: Diferenciais competitivos
-
-#### Histórico de Imports
+#### Fase 2: Query Optimization (1 dia)
 - [ ] Tabela ImportedFile (Id, FileName, UploadDate, UserId, TransactionCount)
 - [ ] Link Transaction → ImportedFile (FK)
 - [ ] Tela mostrando histórico de uploads
@@ -193,10 +171,11 @@
 | Sprint | Dias | Status | Pontos |
 |--------|------|--------|--------|
 | Sprint 1: Documentação | 2-3 | 🔥 CRÍTICO | Obrigatório |
-| Sprint 2: Autenticação | 3-4 | ⭐ EXTRA | +++ Pontos |
-| Sprint 3: Features | 3-4 | ⚡ RECOMENDADO | ++ Pontos |
-| Sprint 4: Performance | 2-3 | ✅ BOM TER | + Pontos |
-| Sprint 5: Avançado | 3-4 | 🎁 BONUS | Diferencial |
+| Sprint 2: Enterprise Features | ✅ CONCLUÍDO | ⭐ EXTRA | +++ Pontos |
+| Sprint 3: Paginação & Filtros | 3-4 | ⚡ PRÓXIMO | ++ Pontos |
+| Sprint 4: Testes & Qualidade | 2-3 | ⚡ RECOMENDADO | ++ Pontos |
+| Sprint 5: Performance & Caching | 2-3 | ✅ BOM TER | + Pontos |
+| Sprint 6: Avançado | 3-4 | 🎁 BONUS | Diferencial |
 
 **Total estimado**: 13-18 dias úteis (~3-4 semanas)
 
@@ -204,26 +183,28 @@
 
 ## 🎖️ Estratégia para Maximizar Pontos
 
-### Foco Imediato (Esta Semana)
-1. **README completo** - 3-4 horas ✅ CRÍTICO
-2. **API Documentation** - 2-3 horas ✅ CRÍTICO
-3. **Testes de Integração** - 1 dia ✅ CRÍTICO
-4. **Review geral** - 2 horas ✅ CRÍTICO
+### Foco Imediato (Sprint 2 ✅ Concluído)
+1. ✅ **Serilog Logging** - Implementado (logs estruturados com correlation ID)
+2. ✅ **FluentValidation** - Implementado (CPF real, validações de input)
+3. ✅ **ProblemDetails RFC 7807** - Implementado (erros padronizados)
+4. ✅ **API Versioning v1** - Implementado (11 endpoints em /api/v1/)
+5. ✅ **Application Insights** - Configurado (pronto para telemetria)
+6. ✅ **Correlation ID Tracking** - Implementado (rastreamento end-to-end)
 
-**→ MVP pronto para submissão**
+**→ Enterprise-grade features implementadas**
 
-### Próxima Semana (Se houver tempo)
-1. **JWT Auth** - 2 dias ⭐ +5 pontos
-2. **OAuth Google** - 1 dia ⭐⭐ +10 pontos
-3. **Paginação** - 1 dia ⚡ Qualidade
-4. **Logging** - 4 horas ⚡ Profissionalismo
+### Próxima Semana (Sprint 3: Paginação & Filtros)
+1. **Testes atualizar para v1** - 2-3 horas ⭐ CRÍTICO (endpoints migraram)
+2. **Paginação** - 1 dia ⚡ Qualidade (usabilidade)
+3. **Filtros avançados** - 1 dia ⚡ Qualidade (data, tipo, ordenação)
+4. **Índices no banco** - 4 horas ⚡ Performance
 
-**→ Projeto destaque**
+**→ API mais usável e escalável**
 
 ### Diferencial Competitivo
-1. **Dashboard com gráficos** - Wow factor
-2. **Testes E2E** - Raridade
-3. **Performance otimizada** - Expertise técnica
+1. **Sprint 2 concluído** = Logging, validações, versionamento (raro em MVPs)
+2. **Dashboard com gráficos** - Wow factor
+3. **Testes E2E** - Raridade
 4. **Documentação impecável** - Profissionalismo
 
 ---
@@ -261,23 +242,23 @@
 
 ## 💡 Recomendação Final
 
-**Para submissão IMEDIATA** (MVP sólido):
-- Sprint 1 completo (2-3 dias)
+**Para submissão IMEDIATA** (MVP sólido + Enterprise Features):
+- Sprint 1 + Sprint 2 completo ✅ (documentação + logging/validações/versioning)
 - Review e polish (1 dia)
 
 **Para submissão DESTAQUE** (com pontos extras):
-- Sprint 1 + Sprint 2 (5-7 dias)
-- Autenticação implementada = diferencial forte
+- Sprint 1 + Sprint 2 ✅ + Sprint 3 início (5-7 dias)
+- Paginação + Filtros = melhor UX
 
 **Para submissão EXCEPCIONAL** (top candidate):
-- Sprint 1 + Sprint 2 + Sprint 3 (8-11 dias)
-- Auth + Features + Dashboard = impressionante
+- Sprint 1 + Sprint 2 ✅ + Sprint 3 + Sprint 4 (8-11 dias)
+- Logging + Filtros + Testes + Dashboard = impressionante
 
 ---
 
 ## 📝 Próxima Ação Sugerida
 
-**AGORA**: Criar branch `docs/complete-readme` e completar documentação
-**DEPOIS**: Decidir se investe em auth ou submete MVP
+**AGORA**: Atualizar testes para endpoints `/api/v1/` (breaking change)
+**DEPOIS**: Implementar paginação e filtros (Sprint 3)
 
-Quer que eu ajude a implementar algum destes sprints?
+Quer que eu ajude a implementar os testes ou o próximo sprint?

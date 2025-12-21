@@ -7,7 +7,12 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Core;
+using FluentValidation;
+using Hellang.Middleware.ProblemDetails;
 using CnabApi.Data;
 using CnabApi.Data.Seed;
 using CnabApi.Services;
@@ -15,12 +20,43 @@ using CnabApi.Services.Auth;
 using CnabApi.Middleware;
 using CnabApi.Options;
 using CnabApi.Models;
+using CnabApi.Validators;
 
-var builder = WebApplication.CreateBuilder(args);
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "CnabApi")
+    .Enrich.WithMachineName()
+    .WriteTo.Console(outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] [CorrelationId: {CorrelationId}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: "logs/cnab-api-.txt",
+        rollingInterval: RollingInterval.Day,
+        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] [CorrelationId: {CorrelationId}] {Message:lj}{NewLine}{Exception}",
+        retainedFileCountLimit: 30)
+    .CreateLogger();
+
+try
+{
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Host.UseSerilog();
+
+    // Add services
 
 // Add services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// Add API Versioning
+builder.Services.AddApiVersioning(options =>
+{
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.ReportApiVersions = true;
+});
+
+// Add FluentValidation
+builder.Services.AddValidatorsFromAssemblyContaining<TransactionValidator>();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -77,6 +113,14 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod()
             .AllowAnyHeader();
     });
+});
+
+// Add Problem Details (RFC 7807) for standardized error responses
+builder.Services.AddProblemDetails(options =>
+{
+    options.MapToStatusCode<NotImplementedException>(StatusCodes.Status501NotImplemented);
+    options.MapToStatusCode<HttpRequestException>(StatusCodes.Status503ServiceUnavailable);
+    options.MapToStatusCode<Exception>(StatusCodes.Status500InternalServerError);
 });
 
 // Options bindings
@@ -187,7 +231,13 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Add global exception handling middleware (first in pipeline)
+// Add Correlation ID middleware (must be first)
+app.UseMiddleware<CorrelationIdMiddleware>();
+
+// Add Problem Details middleware
+app.UseProblemDetails();
+
+// Add global exception handling middleware
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // Enable compression
@@ -213,13 +263,23 @@ app.MapControllers();
 try
 {
     await DataSeeder.SeedAsync(app.Services);
+    Log.Information("Database migrations and seeding completed successfully");
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"Migration/Seed note: {ex.Message}");
+    Log.Warning($"Migration/Seed note: {ex.Message}");
 }
 
 app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 
 /// <summary>
 /// Partial class to exclude Program from code coverage.

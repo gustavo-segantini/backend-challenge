@@ -5,6 +5,8 @@ using Microsoft.Extensions.Options;
 using Moq;
 using CnabApi.Data;
 using CnabApi.Models;
+using CnabApi.Models.Requests;
+using CnabApi.Models.Responses;
 using CnabApi.Options;
 using CnabApi.Services.Auth;
 

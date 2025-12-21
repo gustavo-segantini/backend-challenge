@@ -1,5 +1,7 @@
 using CnabApi.Controllers;
 using CnabApi.Models;
+using CnabApi.Models.Requests;
+using CnabApi.Models.Responses;
 using CnabApi.Services.Auth;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;

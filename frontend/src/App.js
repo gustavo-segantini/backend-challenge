@@ -186,7 +186,7 @@ function App() {
             setSearched(false);
           }}
           onGitHub={() => {
-            const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+            const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
             const state = encodeURIComponent(window.location.origin);
             window.location.href = `${apiBase}/auth/github/login?redirectUri=${state}`;
           }}

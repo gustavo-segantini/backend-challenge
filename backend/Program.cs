@@ -35,6 +35,7 @@ try
         .AddOptionsConfiguration(builder.Configuration)
         .AddHttpClientsConfiguration()
         .AddDatabaseConfiguration(builder)
+        .AddApplicationInsightsConfiguration(builder.Configuration)
         .AddCachingConfiguration(builder)
         .AddCompressionConfiguration()
         .AddApplicationServices();

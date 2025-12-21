@@ -299,4 +299,12 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Adds Application Insights telemetry configuration.
+    /// </summary>
+    public static IServiceCollection AddApplicationInsightsConfiguration(this IServiceCollection services, IConfiguration configuration)
+    {
+        return services.AddApplicationInsightsTelemetryConfiguration(configuration);
+    }
 }

@@ -1,0 +1,271 @@
+.transaction-list-container {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.transaction-list-container h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 20px;
+  color: #2c3e50;
+}
+
+.transaction-count {
+  color: #7f8c8d;
+  font-size: 13px;
+  margin-bottom: 15px;
+}
+
+.transaction-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 600px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+.transaction-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.transaction-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.transaction-list::-webkit-scrollbar-thumb {
+  background: #bdc3c7;
+  border-radius: 10px;
+}
+
+.transaction-list::-webkit-scrollbar-thumb:hover {
+  background: #95a5a6;
+}
+
+.transaction-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #ecf0f1;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+  gap: 15px;
+  animation: fadeIn 0.4s ease-out;
+}
+
+.transaction-item:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateX(4px);
+}
+
+.transaction-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.transaction-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.transaction-type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.transaction-description {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.transaction-nature {
+  font-size: 11px;
+  color: #95a5a6;
+  margin-left: 8px;
+  font-weight: normal;
+}
+
+.transaction-date {
+  font-size: 12px;
+  color: #7f8c8d;
+  text-align: right;
+  flex-shrink: 0;
+  min-width: max-content;
+}
+
+.transaction-details {
+  margin: 0;
+}
+
+.store-info {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  color: #2c3e50;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transaction-meta {
+  margin: 0;
+  font-size: 11px;
+  color: #7f8c8d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transaction-amount-container {
+  flex-shrink: 0;
+  text-align: right;
+  min-width: 120px;
+}
+
+.transaction-amount {
+  font-weight: 700;
+  font-size: 14px;
+  display: block;
+}
+
+.transaction-amount.positive {
+  color: #27ae60;
+}
+
+.transaction-amount.negative {
+  color: #e74c3c;
+}
+
+.empty-message {
+  color: #7f8c8d;
+  font-style: italic;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.more-transactions {
+  color: #7f8c8d;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ecf0f1;
+}
+
+@media (max-width: 768px) {
+  .transaction-list-container {
+    padding: 15px;
+  }
+
+  .transaction-list-container h2 {
+    font-size: 18px;
+  }
+
+  .transaction-item {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .transaction-date {
+    margin-left: 0;
+  }
+
+  .transaction-amount-container {
+    align-self: flex-end;
+    margin-top: 8px;
+  }
+
+  .transaction-type-badge {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+
+  .transaction-description {
+    font-size: 13px;
+  }
+
+  .transaction-amount {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .transaction-list-container {
+    padding: 12px;
+  }
+
+  .transaction-list-container h2 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .transaction-list {
+    max-height: 500px;
+    gap: 10px;
+  }
+
+  .transaction-item {
+    padding: 8px;
+  }
+
+  .transaction-header {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .transaction-count {
+    font-size: 12px;
+  }
+
+  .store-info {
+    font-size: 12px;
+  }
+
+  .transaction-meta {
+    font-size: 10px;
+  }
+
+  .transaction-type-badge {
+    width: 22px;
+    height: 22px;
+    font-size: 9px;
+  }
+}
+
+/* Animation for fade-in effect */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .transaction-item {
+    animation: none;
+  }
+}

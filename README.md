@@ -1,99 +1,359 @@
-# Programming Challenge - Back-end Position
+# 🏦 CNAB Parser API - Backend Challenge
 
-Please read this document carefully from beginning to end. The purpose of this test is to assess your technical programming skills. The challenge consists of parsing this text file (https://github.com/ByCodersTec/desafio-ruby-on-rails/blob/master/CNAB.txt) and saving its information (financial transactions) into a database of your choice. This challenge should be completed by you at home. Take as much time as you need, but usually you shouldn't need more than a few hours.
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-268%20passing-brightgreen)](https://github.com)
+[![Coverage](https://img.shields.io/badge/coverage-86.7%25-brightgreen)](https://github.com)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-## Challenge Submission Instructions
+Uma API robusta, production-ready para processamento e análise de arquivos CNAB com autenticação JWT, OAuth GitHub, e recursos enterprise como logging estruturado, validação robusta e testes abrangentes.
 
-1.  First, fork this project to your Github account (create one if you don't have it).
-2.  Implement the project as described below in your local clone.
-3.  Send the project or the fork/link to your ByCoders contact with a copy to **rh@bycoders.com.br**.
+## 📋 Índice
 
-## Project Description
+- [Visão Geral](#visão-geral)
+- [Tecnologias](#tecnologias)
+- [Pré-requisitos](#pré-requisitos)
+- [Setup Rápido](#setup-rápido)
+- [Configuração Detalhada](#configuração-detalhada)
+- [Uso da API](#uso-da-api)
+- [Desenvolvimento](#desenvolvimento)
+- [Testes](#testes)
+- [Troubleshooting](#troubleshooting)
+- [Documentação](#documentação)
 
-You received a CNAB file with financial transaction data from several stores. We need to create a way for this data to be imported into a database. Your task is to create a web interface that accepts uploads of the CNAB file (https://github.com/ByCodersTec/desafio-ruby-on-rails/blob/master/CNAB.txt), normalizes the data, stores it in a relational database, and displays this information on the screen.
+## 🎯 Visão Geral
 
-## Web Application Requirements
+**CNAB Parser API** é uma solução completa para processar arquivos CNAB (Configuração Nacional Aplicativo Computadorial Bancário), fornecendo:
 
-Your web application **MUST**:
+✅ **Upload e parser de arquivos CNAB** com validação rigorosa  
+✅ **API RESTful versioned** (`/api/v1/`) com autenticação JWT + OAuth GitHub  
+✅ **Paginação, filtros e ordenação** em consultas de transações  
+✅ **Logging estruturado** com correlation ID end-to-end (Serilog)  
+✅ **Validação robusta** com FluentValidation (CPF real, credenciais)  
+✅ **Testes abrangentes** (268 testes com 86.7% de cobertura)  
+✅ **Docker Compose** para desenvolvimento e produção  
+✅ **Application Insights** pronto para telemetria em produção  
+✅ **ProblemDetails RFC 7807** para respostas HTTP padronizadas  
+✅ **Swagger/OpenAPI** com documentação interativa  
 
-1.  Have a screen (via a form) to upload the file\
-    *Extra points if you don't use a popular CSS framework.*
+## 🛠️ Tecnologias
 
-2.  Parse the received file, normalize the data, and correctly save it
-    in a relational database\
-    *(Pay attention to the CNAB documentation below.)*
+| Camada | Tecnologia | Versão | Propósito |
+|--------|-----------|--------|----------|
+| **Runtime** | .NET | 9.0/10.0 | Execução |
+| **Web Framework** | ASP.NET Core | Latest | APIs HTTP |
+| **Database** | PostgreSQL | 15 | Persistência |
+| **ORM** | Entity Framework Core | Latest | Acesso a dados |
+| **Logging** | Serilog | 4.2.0 | Logs estruturados |
+| **Validação** | FluentValidation | 11.11.0 | Validação de inputs |
+| **Errors** | ProblemDetails Middleware | 6.4.1 | RFC 7807 |
+| **API Version** | Microsoft.AspNetCore.Mvc.Versioning | 5.1.0 | v1, v2... |
+| **Testing** | xUnit + Moq | Latest | Testes |
+| **Frontend** | React | 19 | UI |
+| **Containers** | Docker | Latest | Orquestração |
 
-3.  Display a **list of imported operations by store**, including a
-    **total account balance**
+## Arquitetura
+- API REST: [backend/Program.cs](backend/Program.cs) com controllers em [backend/Controllers](backend/Controllers).
+- Camada de domínio/serviços: parser, upload, transações e arquivos em [backend/Services](backend/Services).
+- Persistência: EF Core + migrations em [backend/Data](backend/Data).
+- Middleware: tratamento global de erros (ExceptionHandlingMiddleware).
 
-4.  Be written in your preferred programming language
+## Pré-requisitos
 
-5.  Be simple to configure and run in a Unix-based system (Linux or
-    macOS)\
-    *(Use only free/open-source languages and libraries.)*
+**Mínimo (recomendado):**
+- Docker Desktop ([Download](https://www.docker.com/products/docker-desktop))
 
-6.  Use **Git** with atomic and well-described commits
+**Opcional (desenvolvimento local):**
+- .NET 9 SDK
+- Node 20+
+- PostgreSQL 16
 
-7.  Use **PostgreSQL, MySQL, or SQL Server**
+## Como rodar com Docker (recomendado)
 
-8.  Have **automated tests**
+### Opção 1 - Setup automático (recomendado)
 
-9.  Use **Docker Compose**\
-    *Extra points if you use it.*
+```bash
+# Windows
+setup.bat
 
-10. Include a **README** describing the project and its setup
+# macOS / Linux / WSL
+bash setup.sh
+```
 
-11. Include instructions describing **how to consume the API endpoint**
+O script automaticamente:
+1. ✅ Verifica se Docker está instalado e rodando
+2. ✅ Cria arquivo `.env` (caso não exista)
+3. ✅ Faz build dos containers
+4. ✅ Sobe todos os serviços
+5. ✅ Aguarda até ficarem healthy (30s)
 
-## The application does NOT need to:
+### Opção 2 - Comando manual
 
-1.  Handle authentication or authorization\
-    *Extra points if implemented; even more if OAuth.*
+```bash
+docker-compose up --build
+```
 
-2.  Document the API\
-    *Optional --- but earns extra points.*
+### Serviços Disponíveis
 
-## CNAB Documentation
+| Serviço | URL | Descrição |
+|---------|-----|-----------|
+| **Frontend** | http://localhost:3000 | Interface de upload de CNAB |
+| **API** | http://localhost:5000 | Backend REST API |
+| **Swagger** | http://localhost:5000/swagger | Documentação interativa |
+| **Database** | localhost:5432 | PostgreSQL (postgres/postgres) |
+| **Health Check** | http://localhost:5000/api/v1/health | Status da aplicação |
+| **Prometheus Metrics** | http://localhost:5000/metrics | Métricas para Prometheus/Grafana |
 
-| Field        | Start | End | Size | Description                                 |
-|--------------|:-----:|:---:|:----:|---------------------------------------------|
-| Type         | 1     | 1   | 1    | Transaction type                             |
-| Date         | 2     | 9   | 8    | Date of occurrence                           |
-| Value        | 10    | 19  | 10   | Transaction amount (divide by 100.00)        |
-| CPF          | 20    | 30  | 11   | Beneficiary's CPF                            |
-| Card         | 31    | 42  | 12   | Card used in the transaction                 |
-| Time         | 43    | 48  | 6    | Time of occurrence (UTC-3)                   |
-| Store Owner  | 49    | 62  | 14   | Store representative name                    |
-| Store Name   | 63    | 81  | 19   | Store name                                   |
+### Monitoramento e Saúde da Aplicação
 
-## Transaction Types
+```bash
+# Health check simples (retorna "Healthy")
+curl http://localhost:5000/api/v1/health
 
-| Type | Description    | Nature  | Sign |
-|------|----------------|---------|------|
-| 1    | Debit          | Income  | +    |
-| 2    | Boleto         | Expense | -    |
-| 3    | Financing      | Expense | -    |
-| 4    | Credit         | Income  | +    |
-| 5    | Loan Receipt   | Income  | +    |
-| 6    | Sales          | Income  | +    |
-| 7    | TED Receipt    | Income  | +    |
-| 8    | DOC Receipt    | Income  | +    |
-| 9    | Rent           | Expense | -    |
+# Métricas Prometheus (para scraping)
+curl http://localhost:5000/metrics
 
+# Readiness probe (k8s)
+curl http://localhost:5000/api/v1/health/ready
 
-## Evaluation Criteria
+# Liveness probe (k8s)
+curl http://localhost:5000/api/v1/health/live
+```
 
-Your project will be evaluated based on:
+### Comandos Úteis
 
-1.  Whether your application meets the basic requirements
-2.  Documentation on environment setup and application execution
-3.  Whether you followed the challenge submission instructions
-4.  Quality and coverage of automated tests
+```bash
+# Ver status dos serviços
+docker-compose ps
 
-We will also assess:
+# Ver logs em tempo real
+docker-compose logs -f api              # Logs da API
+docker-compose logs -f frontend         # Logs do Frontend
+docker-compose logs -f                  # Todos os logs
 
--   Your familiarity with standard libraries
--   Your experience with object-oriented programming
--   The structure and maintainability of your project
+# Parar serviços
+docker-compose down
 
-## Good luck!
+# Reiniciar tudo
+docker-compose down && docker-compose up -d --build
+
+# Limpar volumes (recria banco)
+docker-compose down -v
+```
+
+## Como rodar só a API (sem Docker)
+
+### Backend
+
+Pré-requisitos: .NET 9 SDK + PostgreSQL 16
+
+```bash
+# 1. Instalar dependências
+cd backend
+dotnet restore
+
+# 2. Configurar banco (opcional)
+$env:ConnectionStrings__PostgresConnection = "Host=localhost;Port=5432;Database=cnab_db;Username=postgres;Password=postgres"
+
+# 3. Aplicar migrations
+dotnet ef database update
+
+# 4. Rodar API
+dotnet run
+```
+
+API fica em: http://localhost:5000
+
+### Frontend
+
+Pré-requisitos: Node.js 20+
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+Frontend fica em: http://localhost:3000
+
+## Testes
+
+### Executar Testes
+
+```bash
+# Todos os testes
+dotnet test
+
+# Apenas unitários
+dotnet test backend.Tests/CnabApi.Tests.csproj
+
+# Apenas integração
+dotnet test backend.IntegrationTests/CnabApi.IntegrationTests.csproj
+```
+
+### Code Coverage
+
+O projeto tem **86.7% de cobertura de linha**, **77.27% de branch** e **90.5% de métodos** (268 testes).
+
+#### Gerar Relatório de Coverage
+
+```bash
+# 1. Executar testes com cobertura (gera coverage.cobertura.xml)
+dotnet test backend.Tests/CnabApi.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+
+# 2. Gerar relatório HTML (requer reportgenerator)
+reportgenerator -reports:backend.Tests/coverage.cobertura.xml -targetdir:backend.Tests/TestResults/CoverageReport -reporttypes:Html
+
+# 3. Abrir relatório no navegador
+# Windows
+start backend.Tests/TestResults/CoverageReport/index.html
+# macOS
+open backend.Tests/TestResults/CoverageReport/index.html
+# Linux
+xdg-open backend.Tests/TestResults/CoverageReport/index.html
+```
+
+#### Instalar ReportGenerator (primeira vez)
+
+```bash
+dotnet tool install -g dotnet-reportgenerator-globaltool
+```
+
+#### O que está excluído da cobertura
+
+Código de infraestrutura marcado com `[ExcludeFromCodeCoverage]`:
+- ✅ Migrations do EF Core
+- ✅ Program.cs (configuração de startup)
+- ✅ Extensions de configuração (ServiceCollection, Middleware, HealthChecks)
+- ✅ DataSeeder
+- ✅ Middleware de exceções
+
+Isso garante que a cobertura reflete apenas **código de negócio testável**.
+
+## Endpoints Principais
+
+- `POST /api/transactions/upload` — upload de arquivo CNAB
+- `GET /api/transactions/{cpf}` — lista transações do CPF
+- `GET /api/transactions/{cpf}/balance` — saldo do CPF
+- `DELETE /api/transactions` — limpa dados
+
+Detalhes: [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
+
+## Variáveis de Ambiente
+
+Arquivo `.env` controla a configuração:
+
+```bash
+POSTGRES_USER=postgres              # Usuário do banco
+POSTGRES_PASSWORD=postgres          # Senha do banco
+API_PORT=5000                       # Porta da API
+FRONTEND_PORT=3000                  # Porta do frontend
+ASPNETCORE_ENVIRONMENT=Production   # Modo (Production/Development)
+```
+
+Para customizar, edite `.env` e reinicie:
+
+```bash
+docker-compose down
+docker-compose up -d --build
+```
+
+## Troubleshooting
+
+### "Docker is not installed"
+- Instale [Docker Desktop](https://www.docker.com/products/docker-desktop)
+- Reinicie o computador
+- Execute setup novamente
+
+### "Docker daemon is not running"
+- Abra Docker Desktop
+- Aguarde até que esteja pronto
+- Execute setup novamente
+
+### "Port 5000 is already in use"
+```bash
+API_PORT=5001              # Edite .env
+docker-compose down && docker-compose up -d --build
+```
+
+### "Frontend não conecta com API"
+```bash
+docker-compose logs api    # Verifique logs
+```
+- Limpe cache do navegador (Ctrl+Shift+Delete)
+- Verifique se API está em http://localhost:5000/swagger
+
+### "Banco de dados não sobe"
+```bash
+docker-compose down -v     # Remove volumes
+docker-compose up -d --build
+```
+
+### Ver logs detalhados
+```bash
+docker-compose logs postgres              # Log completo
+docker-compose logs postgres --tail=50    # Últimas 50 linhas
+```
+
+## Dicas Úteis
+
+- **Primeira execução**: pode levar 5-10 minutos para downloads e build
+- **Antes de git pull**: sempre execute `docker-compose down`
+- **Para troubleshooting**: use `docker-compose logs -f` para ver logs em tempo real
+- **Containers reiniçiam automaticamente** (`restart: unless-stopped`)
+
+## Estrutura do Projeto
+
+```
+backend-challenge/
+├── backend/                    # API ASP.NET Core 9
+│   ├── Controllers/            # Endpoints REST
+│   ├── Services/               # Lógica de negócio
+│   ├── Models/                 # DTOs e entidades
+│   ├── Data/                   # EF Core + migrations
+│   └── Dockerfile              # Build produção
+│
+├── backend.Tests/              # Testes unitários (xUnit)
+│   ├── Services/               # Testes de serviços
+│   ├── Controllers/            # Testes de controllers
+│   └── Utilities/              # Testes de utilitários
+│
+├── backend.IntegrationTests/   # Testes de integração
+│
+├── frontend/                   # React app
+│   ├── public/                 # HTML estático
+│   ├── src/                    # Componentes
+│   └── Dockerfile              # Build produção
+│
+├── docker-compose.yml          # Orquestração
+├── .env.example                # Template de variáveis
+├── setup.bat                   # Setup Windows
+├── setup.sh                    # Setup Unix
+│
+├── README.md                   # Este arquivo
+├── GETTING_STARTED.md          # Guia detalhado
+├── API_DOCUMENTATION.md        # Referência de endpoints
+├── ROADMAP.md                  # Plano de desenvolvimento
+└── SETUP_VERIFICATION.md       # Checklist de verificação
+```
+
+**Total de testes**: 268 (xUnit + Moq)  
+**Cobertura**: 86.7% linha, 77.27% branch, 90.5% métodos
+
+## 📚 Documentação
+
+- [GETTING_STARTED.md](GETTING_STARTED.md) - Guia detalhado com mais exemplos e troubleshooting avançado
+- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - Referência completa de endpoints com exemplos curl/Postman
+- [ROADMAP.md](ROADMAP.md) - Plano de desenvolvimento (próximas features e timeline)
+
+## 🏗️ Arquitetura
+
+- **Backend**: ASP.NET Core 9 + EF Core 9 + PostgreSQL 16
+- **Frontend**: React 18 + Axios
+- **Database**: PostgreSQL com migrations automáticas
+- **Cache**: Redis para performance
+- **Testes**: xUnit + Moq + WebApplicationFactory
+- **Deploy**: Docker Compose com health checks
+
+## Licença
+
+Uso interno para o desafio técnico.

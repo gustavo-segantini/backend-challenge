@@ -1,0 +1,42 @@
+using System.Diagnostics.CodeAnalysis;
+
+namespace CnabApi.Middleware;
+
+/// <summary>
+/// Global exception handling middleware that catches all unhandled exceptions
+/// and returns standardized error responses.
+/// </summary>
+[ExcludeFromCodeCoverage]
+public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+{
+    private readonly RequestDelegate _next = next;
+    private readonly ILogger<ExceptionHandlingMiddleware> _logger = logger;
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An unhandled exception has occurred");
+            await HandleExceptionAsync(context, ex);
+        }
+    }
+
+    private static Task HandleExceptionAsync(HttpContext context, Exception exception)
+    {
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+
+        var response = new
+        {
+            error = "Internal server error",
+            message = exception.Message,
+            timestamp = DateTime.UtcNow
+        };
+
+        return context.Response.WriteAsJsonAsync(response);
+    }
+}

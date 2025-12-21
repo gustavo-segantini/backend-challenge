@@ -33,11 +33,17 @@ public class TransactionsController(
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UploadCnabFile(IFormFile file, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Starting CNAB file upload process. File: {FileName}, Size: {FileSize} bytes", 
-            file?.FileName, file?.Length);
-
         try
         {
+            _logger.LogInformation("Starting CNAB file upload process. File: {FileName}, Size: {FileSize} bytes", 
+                file?.FileName, file?.Length);
+
+            if (file == null)
+            {
+                _logger.LogWarning("File reading failed: {Error}", "Arquivo não foi fornecido ou está vazio.");
+                return BadRequest(new { error = "Arquivo não foi fornecido ou está vazio." });
+            }
+
             var result = await _uploadService.ProcessCnabUploadAsync(file, cancellationToken);
 
             if (!result.IsSuccess)

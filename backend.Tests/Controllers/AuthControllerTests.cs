@@ -2,6 +2,7 @@ using CnabApi.Controllers;
 using CnabApi.Models;
 using CnabApi.Services.Auth;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -110,6 +111,20 @@ public class AuthControllerTests
     [Fact]
     public async Task Me_WhenSuccessful_ReturnsProfile()
     {
+        // Arrange: Configure a valid user principal
+        var claims = new List<System.Security.Claims.Claim>
+        {
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "1"),
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "user")
+        };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "Bearer");
+        var principal = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = principal }
+        };
+
         var profile = new UserProfileResponse { Username = "user", Role = "User" };
         _authServiceMock
             .Setup(s => s.MeAsync(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<CancellationToken>()))
@@ -125,16 +140,15 @@ public class AuthControllerTests
     [Fact]
     public async Task Me_WhenUnauthorized_Returns401()
     {
-        _authServiceMock
-            .Setup(s => s.MeAsync(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ServiceResponse<UserProfileResponse>.Fail(401, "Unauthorized."));
+        // Arrange: User is null (no HttpContext configured), so controller returns Unauthorized directly
 
         var result = await _controller.Me(CancellationToken.None);
 
-        var objectResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
-        objectResult.StatusCode.Should().Be(401);
-        var errorProperty = objectResult.Value!.GetType().GetProperty("error");
-        errorProperty!.GetValue(objectResult.Value).Should().Be("Unauthorized.");
+        // Assert: Controller returns UnauthorizedObjectResult when User is null
+        var unauthorizedResult = result.Result.Should().BeOfType<UnauthorizedObjectResult>().Subject;
+        unauthorizedResult.StatusCode.Should().Be(401);
+        var errorProperty = unauthorizedResult.Value!.GetType().GetProperty("error");
+        errorProperty!.GetValue(unauthorizedResult.Value).Should().Be("User is not authenticated");
     }
 
     [Fact]

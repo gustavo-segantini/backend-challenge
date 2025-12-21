@@ -140,10 +140,16 @@ public class AuthController(IAuthService authService, ILogger<AuthController> lo
     [ProducesResponseType(typeof(object), StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<UserProfileResponse>> Me(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Profile request for user: {User}", User?.Identity?.Name ?? "Unknown");
-
         try
         {
+            _logger.LogInformation("Profile request for user: {User}", User?.Identity?.Name ?? "Unknown");
+
+            if (User == null)
+            {
+                _logger.LogWarning("Profile request failed: User is not authenticated");
+                return Unauthorized(new { error = "User is not authenticated" });
+            }
+
             var result = await _authService.MeAsync(User, cancellationToken);
             
             if (!result.Success)

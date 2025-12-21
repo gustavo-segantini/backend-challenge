@@ -100,6 +100,24 @@ docker-compose up --build
 | **API** | http://localhost:5000 | Backend REST API |
 | **Swagger** | http://localhost:5000/swagger | Documentação interativa |
 | **Database** | localhost:5432 | PostgreSQL (postgres/postgres) |
+| **Health Check** | http://localhost:5000/api/v1/health | Status da aplicação |
+| **Prometheus Metrics** | http://localhost:5000/metrics | Métricas para Prometheus/Grafana |
+
+### Monitoramento e Saúde da Aplicação
+
+```bash
+# Health check simples (retorna "Healthy")
+curl http://localhost:5000/api/v1/health
+
+# Métricas Prometheus (para scraping)
+curl http://localhost:5000/metrics
+
+# Readiness probe (k8s)
+curl http://localhost:5000/api/v1/health/ready
+
+# Liveness probe (k8s)
+curl http://localhost:5000/api/v1/health/live
+```
 
 ### Comandos Úteis
 

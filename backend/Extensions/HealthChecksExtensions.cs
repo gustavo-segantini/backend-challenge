@@ -1,4 +1,5 @@
 using HealthChecks.NpgSql;
+using HealthChecks.Redis;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Prometheus;
 
@@ -10,20 +11,28 @@ namespace CnabApi.Extensions;
 public static class HealthChecksExtensions
 {
     /// <summary>
-    /// Adds health checks configuration with PostgreSQL and custom checks.
+    /// Adds health checks configuration with PostgreSQL, Redis, and custom checks.
     /// </summary>
     public static IServiceCollection AddHealthChecksConfiguration(this IServiceCollection services, WebApplicationBuilder builder)
     {
-        var connectionString = builder.Configuration.GetConnectionString("PostgresConnection")
+        var postgresConnectionString = builder.Configuration.GetConnectionString("PostgresConnection")
             ?? "Host=postgres;Port=5432;Database=cnab_db;Username=postgres;Password=postgres";
+
+        var redisConnectionString = builder.Configuration.GetConnectionString("RedisConnection")
+            ?? "localhost:6379";
 
         services
             .AddHealthChecks()
             .AddNpgSql(
-                connectionString,
+                postgresConnectionString,
                 name: "PostgreSQL",
                 failureStatus: HealthStatus.Unhealthy,
                 tags: ["database", "postgres"])
+            .AddRedis(
+                redisConnectionString,
+                name: "Redis",
+                failureStatus: HealthStatus.Degraded,
+                tags: ["cache", "redis"])
             .AddCheck(
                 "API",
                 () => HealthCheckResult.Healthy("API is running"),

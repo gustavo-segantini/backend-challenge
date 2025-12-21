@@ -7,10 +7,17 @@ namespace CnabApi.Controllers;
 
 /// <summary>
 /// Authentication endpoints: register/login/refresh and GitHub OAuth callback.
+/// 
+/// Handles:
+/// - User registration with credentials
+/// - Login with username/password or GitHub OAuth
+/// - JWT token refresh for expired tokens
+/// - Token validation
 /// </summary>
 [ApiController]
 [Route("api/v1/[controller]")]
 [ApiVersion("1.0")]
+[Tags("Authentication")]
 public class AuthController(IAuthService authService, ILogger<AuthController> logger) : ControllerBase
 {
     private readonly IAuthService _authService = authService;

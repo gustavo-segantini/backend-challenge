@@ -38,7 +38,8 @@ try
         .AddApplicationInsightsConfiguration(builder.Configuration)
         .AddCachingConfiguration(builder)
         .AddCompressionConfiguration()
-        .AddApplicationServices();
+        .AddApplicationServices()
+        .AddHealthChecksConfiguration(builder);
 
     // Get JWT options for authentication configuration
     var jwtOptions = builder.Configuration.GetSection("Jwt").Get<CnabApi.Options.JwtOptions>() 
@@ -64,6 +65,8 @@ try
     app.UseHttpsRedirection();
     app.UseCors("ReactPolicy");
     app.UseAuthenticationConfiguration();
+    app.UseHealthChecks("/api/v1/health");
+    app.UsePrometheusMetrics();
     app.MapControllers();
 
     // Run database migrations and seeding

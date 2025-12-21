@@ -57,7 +57,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds Swagger/OpenAPI documentation configuration.
+    /// Adds Swagger/OpenAPI documentation configuration with enhanced documentation.
     /// </summary>
     public static IServiceCollection AddSwaggerConfiguration(this IServiceCollection services)
     {
@@ -67,28 +67,66 @@ public static class ServiceCollectionExtensions
             {
                 Version = "v1",
                 Title = "CNAB Transaction API",
-                Description = "API for managing CNAB file uploads and transaction queries",
+                Description = """
+                    Comprehensive API for managing CNAB file uploads and transaction queries.
+                    
+                    **Features:**
+                    - CNAB file upload and parsing with real-time validation
+                    - Transaction queries with CPF-based filtering and pagination
+                    - JWT-based authentication with GitHub OAuth integration
+                    - Balance calculation and transaction categorization
+                    - Health checks and Prometheus metrics
+                    
+                    **Authentication:**
+                    All transaction endpoints require Bearer token authentication via JWT.
+                    Use /api/v1/auth/login or /api/v1/auth/github/login to obtain tokens.
+                    """,
                 Contact = new OpenApiContact
                 {
                     Name = "Backend Challenge",
-                    Url = new Uri("https://github.com/your-repo/backend-challenge")
+                    Url = new Uri("https://github.com/gustavo-segantini/backend-challenge")
+                },
+                License = new OpenApiLicense
+                {
+                    Name = "MIT"
                 }
             });
 
-            // Include XML comments
+            // Include XML comments from assembly
             var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
             var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
-            options.IncludeXmlComments(xmlPath);
+            if (File.Exists(xmlPath))
+            {
+                options.IncludeXmlComments(xmlPath);
+            }
+
+            // Add tags for grouping endpoints
+            options.TagActionsBy(api =>
+            {
+                if (api.GroupName != null)
+                    return new[] { api.GroupName };
+
+                var controllerActionDescriptor = api.ActionDescriptor as Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor;
+                return new[] { controllerActionDescriptor?.ControllerName ?? "Default" };
+            });
 
             // Enable JWT bearer authentication in Swagger UI
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
-                Description = "JWT Authorization header using the Bearer scheme. Example: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'",
                 Name = "Authorization",
-                In = ParameterLocation.Header,
                 Type = SecuritySchemeType.Http,
                 Scheme = "bearer",
-                BearerFormat = "JWT"
+                BearerFormat = "JWT",
+                Description = """
+                    JWT Bearer token authentication.
+                    
+                    Example header:
+                    Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjcmVhYnRlZCIsImlhdCI6MTcwMzE0MzYwMH0.sY6hVLd...
+                    
+                    Obtain token via:
+                    - POST /api/v1/auth/login (credentials)
+                    - GET /api/v1/auth/github/login (GitHub OAuth)
+                    """
             });
 
             options.AddSecurityRequirement(new OpenApiSecurityRequirement

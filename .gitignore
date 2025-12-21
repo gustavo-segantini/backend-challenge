@@ -9,6 +9,10 @@ backend.Tests/obj/
 backend.IntegrationTests/bin/
 backend.IntegrationTests/obj/
 
+# Test coverage and results
+backend.Tests/CoverageReport/
+backend.Tests/TestResults/
+
 # catch-all for dotnet artifacts
 **/bin/
 **/obj/

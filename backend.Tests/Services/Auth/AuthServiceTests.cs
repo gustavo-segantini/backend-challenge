@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Moq;
+using Moq.Protected;
 using CnabApi.Data;
 using CnabApi.Models;
 using CnabApi.Models.Requests;
@@ -582,6 +583,287 @@ public class AuthServiceTests : IDisposable
 
         // Assert
         Assert.Empty(url);
+    }
+
+    #endregion
+
+    #region GitHubCallbackAsync Tests
+
+    [Fact]
+    public async Task GitHubCallbackAsync_WithMissingCode_ReturnsFailure()
+    {
+        // Act
+        var result = await _authService.GitHubCallbackAsync("");
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal(400, result.StatusCode);
+        Assert.Contains("Missing authorization code", result.Error);
+    }
+
+    [Fact]
+    public async Task GitHubCallbackAsync_WithMissingClientId_ReturnsConfigurationError()
+    {
+        // Arrange
+        _gitHubOptionsMock.Setup(x => x.Value).Returns(new GitHubOAuthOptions
+        {
+            ClientId = "",
+            ClientSecret = "test-secret",
+            CallbackUrl = "https://localhost/callback"
+        });
+
+        var authService = new AuthService(
+            _dbContext,
+            _tokenServiceMock.Object,
+            _passwordHasherMock.Object,
+            _jwtOptionsMock.Object,
+            _gitHubOptionsMock.Object,
+            _httpClientFactoryMock.Object);
+
+        // Act
+        var result = await authService.GitHubCallbackAsync("test-code");
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal(500, result.StatusCode);
+        Assert.Contains("not configured", result.Error);
+    }
+
+    [Fact]
+    public async Task GitHubCallbackAsync_WithSuccessfulFlow_CreatesNewUser()
+    {
+        // Arrange
+        var code = "test-code";
+        var gitHubAccessToken = "gh_access_token";
+        var gitHubUserId = 12345L;
+        var gitHubUsername = "octocat";
+
+        var mockHttpMessageHandler = new Mock<HttpMessageHandler>();
+        
+        // Mock token exchange
+        mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.Is<HttpRequestMessage>(req => 
+                    req.RequestUri!.ToString().Contains("oauth/access_token")),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.OK,
+                Content = new StringContent($"{{\"access_token\":\"{gitHubAccessToken}\",\"token_type\":\"bearer\"}}")
+            });
+
+        // Mock user info fetch
+        mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.Is<HttpRequestMessage>(req => 
+                    req.RequestUri!.ToString().Contains("api.github.com/user")),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.OK,
+                Content = new StringContent($"{{\"id\":{gitHubUserId},\"login\":\"{gitHubUsername}\",\"email\":\"octo@github.com\",\"avatar_url\":\"https://github.com/avatar.png\"}}")
+            });
+
+        var httpClient = new HttpClient(mockHttpMessageHandler.Object);
+        _httpClientFactoryMock.Setup(x => x.CreateClient("GitHubOAuth")).Returns(httpClient);
+
+        var refreshToken = new RefreshToken { Token = "refresh-token", ExpiresAt = DateTime.UtcNow.AddDays(7) };
+        _tokenServiceMock.Setup(x => x.GenerateRefreshToken()).Returns(refreshToken);
+        _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.IsAny<User>())).Returns("access-token");
+
+        // Act
+        var result = await _authService.GitHubCallbackAsync(code);
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal(200, result.StatusCode);
+        Assert.NotNull(result.Data);
+        Assert.Equal(gitHubUsername, result.Data.Username);
+
+        // Verify user was created
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.GitHubId == gitHubUserId.ToString());
+        Assert.NotNull(user);
+        Assert.Equal(gitHubUsername, user.GitHubUsername);
+        Assert.Equal("octo@github.com", user.Email);
+    }
+
+    [Fact]
+    public async Task GitHubCallbackAsync_WithExistingUser_UpdatesUserInfo()
+    {
+        // Arrange
+        var gitHubUserId = 12345L;
+        var existingUser = new User
+        {
+            Username = "oldusername",
+            GitHubId = gitHubUserId.ToString(),
+            GitHubUsername = "oldusername",
+            Email = "old@example.com",
+            Role = "User",
+            PasswordHash = "hash"
+        };
+        _dbContext.Users.Add(existingUser);
+        await _dbContext.SaveChangesAsync();
+
+        var code = "test-code";
+        var gitHubAccessToken = "gh_access_token";
+        var newGitHubUsername = "newusername";
+
+        var mockHttpMessageHandler = new Mock<HttpMessageHandler>();
+        
+        // Mock token exchange
+        mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.Is<HttpRequestMessage>(req => 
+                    req.RequestUri!.ToString().Contains("oauth/access_token")),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.OK,
+                Content = new StringContent($"{{\"access_token\":\"{gitHubAccessToken}\"}}")
+            });
+
+        // Mock user info fetch
+        mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.Is<HttpRequestMessage>(req => 
+                    req.RequestUri!.ToString().Contains("api.github.com/user")),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.OK,
+                Content = new StringContent($"{{\"id\":{gitHubUserId},\"login\":\"{newGitHubUsername}\",\"email\":\"new@github.com\",\"avatar_url\":\"https://github.com/newavatar.png\"}}")
+            });
+
+        var httpClient = new HttpClient(mockHttpMessageHandler.Object);
+        _httpClientFactoryMock.Setup(x => x.CreateClient("GitHubOAuth")).Returns(httpClient);
+
+        var refreshToken = new RefreshToken { Token = "refresh-token", ExpiresAt = DateTime.UtcNow.AddDays(7) };
+        _tokenServiceMock.Setup(x => x.GenerateRefreshToken()).Returns(refreshToken);
+        _tokenServiceMock.Setup(x => x.GenerateAccessToken(It.IsAny<User>())).Returns("access-token");
+
+        // Act
+        var result = await _authService.GitHubCallbackAsync(code);
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal(200, result.StatusCode);
+
+        // Verify user was updated
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.GitHubId == gitHubUserId.ToString());
+        Assert.NotNull(user);
+        Assert.Equal(newGitHubUsername, user.GitHubUsername);
+        Assert.Equal("old@example.com", user.Email); // Email is not updated if already set (user.Email ??= ghUser.Email)
+        Assert.NotNull(user.LastLoginAt);
+    }
+
+    [Fact]
+    public async Task GitHubCallbackAsync_WhenTokenExchangeFails_ReturnsError()
+    {
+        // Arrange
+        var mockHttpMessageHandler = new Mock<HttpMessageHandler>();
+        mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.BadRequest
+            });
+
+        var httpClient = new HttpClient(mockHttpMessageHandler.Object);
+        _httpClientFactoryMock.Setup(x => x.CreateClient("GitHubOAuth")).Returns(httpClient);
+
+        // Act
+        var result = await _authService.GitHubCallbackAsync("test-code");
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal(502, result.StatusCode);
+        Assert.Contains("token exchange failed", result.Error);
+    }
+
+    [Fact]
+    public async Task GitHubCallbackAsync_WhenUserInfoFetchFails_ReturnsError()
+    {
+        // Arrange
+        var mockHttpMessageHandler = new Mock<HttpMessageHandler>();
+        
+        // Mock successful token exchange
+        mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.Is<HttpRequestMessage>(req => 
+                    req.RequestUri!.ToString().Contains("oauth/access_token")),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.OK,
+                Content = new StringContent("{\"access_token\":\"token\"}")
+            });
+
+        // Mock failed user info fetch
+        mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.Is<HttpRequestMessage>(req => 
+                    req.RequestUri!.ToString().Contains("api.github.com/user")),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.Unauthorized
+            });
+
+        var httpClient = new HttpClient(mockHttpMessageHandler.Object);
+        _httpClientFactoryMock.Setup(x => x.CreateClient("GitHubOAuth")).Returns(httpClient);
+
+        // Act
+        var result = await _authService.GitHubCallbackAsync("test-code");
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal(502, result.StatusCode);
+        Assert.Contains("user info", result.Error);
+    }
+
+    [Fact]
+    public async Task GitHubCallbackAsync_WhenTokenResponseMissingAccessToken_ReturnsError()
+    {
+        // Arrange
+        var mockHttpMessageHandler = new Mock<HttpMessageHandler>();
+        mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = System.Net.HttpStatusCode.OK,
+                Content = new StringContent("{\"error\":\"invalid_grant\"}")
+            });
+
+        var httpClient = new HttpClient(mockHttpMessageHandler.Object);
+        _httpClientFactoryMock.Setup(x => x.CreateClient("GitHubOAuth")).Returns(httpClient);
+
+        // Act
+        var result = await _authService.GitHubCallbackAsync("test-code");
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal(502, result.StatusCode);
+        Assert.Contains("no token", result.Error);
     }
 
     #endregion

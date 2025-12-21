@@ -1,12 +1,14 @@
 using CnabApi.Data.Seed;
 using CnabApi.Middleware;
 using Serilog;
+using System.Diagnostics.CodeAnalysis;
 
 namespace CnabApi.Extensions;
 
 /// <summary>
 /// Extension methods for configuring the HTTP request pipeline middleware.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class MiddlewareExtensions
 {
     /// <summary>

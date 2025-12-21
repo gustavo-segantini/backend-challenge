@@ -3,12 +3,14 @@ using HealthChecks.Redis;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Prometheus;
+using System.Diagnostics.CodeAnalysis;
 
 namespace CnabApi.Extensions;
 
 /// <summary>
 /// Extension methods for configuring health checks and metrics monitoring.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class HealthChecksExtensions
 {
     /// <summary>
@@ -84,6 +86,7 @@ public static class HealthChecksExtensions
 /// <summary>
 /// Helper class for writing health check responses.
 /// </summary>
+[ExcludeFromCodeCoverage]
 internal static class HealthCheckResponseWriter
 {
     /// <summary>

@@ -10,6 +10,7 @@ using Scrutor;
 using System.Reflection;
 using System.Text;
 using System.Net.Http.Headers;
+using System.Diagnostics.CodeAnalysis;
 using CnabApi.Data;
 using CnabApi.Options;
 using CnabApi.Models;
@@ -20,6 +21,7 @@ namespace CnabApi.Extensions;
 /// <summary>
 /// Extension methods for configuring services in the dependency injection container.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class ServiceCollectionExtensions
 {
     /// <summary>

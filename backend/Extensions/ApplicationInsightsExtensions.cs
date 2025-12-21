@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.ApplicationInsights.AspNetCore.Extensions;
 
 namespace CnabApi.Extensions;
@@ -5,6 +6,7 @@ namespace CnabApi.Extensions;
 /// <summary>
 /// Extension methods for configuring Application Insights telemetry.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class ApplicationInsightsExtensions
 {
     /// <summary>

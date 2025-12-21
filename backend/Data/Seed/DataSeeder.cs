@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using CnabApi.Models;
+using System.Diagnostics.CodeAnalysis;
 
 namespace CnabApi.Data.Seed;
 
+[ExcludeFromCodeCoverage]
 public static class DataSeeder
 {
     private const string DefaultAdminUsername = "admin";

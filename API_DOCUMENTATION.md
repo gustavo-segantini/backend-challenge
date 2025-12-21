@@ -1,325 +1,528 @@
-# API Documentation - CNAB Transaction System
+# 📡 API Documentation - CNAB Parser
 
-## Base URL
-```
-http://localhost:5000/api
-```
+**Base URL**: `http://localhost:5000/api/v1`  
+**Swagger**: `http://localhost:5000/swagger`  
+**Version**: v1.0  
+**Last Updated**: December 2025
 
-## Overview
-This API provides endpoints for managing CNAB (Centro Nacional de Automação Bancária) file uploads and querying transaction data. The system parses CNAB format files, stores transactions in a PostgreSQL database, and provides endpoints to query transaction history and calculate balances by CPF.
+## Índice
 
----
-
-## Endpoints
-
-### 1. Upload CNAB File
-Upload and process a CNAB format file containing transaction records.
-
-**Endpoint:** `POST /api/transactions/upload`
-
-**Content-Type:** `multipart/form-data`
-
-**Request:**
-```bash
-curl -X POST http://localhost:5000/api/transactions/upload \
-  -F "file=@CNAB.txt"
-```
-
-**Request Body:**
-- `file` (file, required): CNAB text file (.txt) with transaction records
-
-**CNAB File Format:**
-Each line represents one transaction with 80 characters in fixed positions:
-- Position 0-1: Transaction Type (1 character)
-- Position 1-9: Date (YYYYMMDD format)
-- Position 9-19: Amount (10 digits, last 2 are decimals)
-- Position 19-30: CPF (11 characters)
-- Position 30-42: Card number (12 characters)
-- Position 42-48: Time (HHMMSS format)
-- Position 48-62: Store Owner name (14 characters)
-- Position 62-80: Store Name (18 characters)
-
-**Transaction Types:**
-- `1` - Debit (Income)
-- `2` - Boleto (Expense)
-- `3` - Financing (Expense)
-- `4` - Credit (Income)
-- `5` - Loan Receipt (Income)
-- `6` - Sales (Income)
-- `7` - TED Receipt (Income)
-- `8` - DOC Receipt (Income)
-- `9` - Rent (Expense)
-
-**Success Response (200 OK):**
-```json
-{
-  "message": "Successfully imported 46 transactions",
-  "count": 46
-}
-```
-
-**Error Response (400 Bad Request):**
-```json
-{
-  "error": "Conteúdo do arquivo está vazio."
-}
-```
-
-**Error Scenarios:**
-- Empty file
-- Invalid file format
-- Line length < 80 characters
-- Invalid date/time format
-- Invalid amount format
-- No valid transactions found
+1. [Autenticação](#autenticação)
+2. [Transações](#transações)
+3. [Códigos de Status](#códigos-de-status)
+4. [Modelos de Dados](#modelos-de-dados)
+5. [Exemplos por Caso de Uso](#exemplos-por-caso-de-uso)
 
 ---
 
-### 2. Get Transactions by CPF
-Retrieve all transactions for a specific CPF, ordered by date (most recent first).
+## Autenticação
 
-**Endpoint:** `GET /api/transactions/{cpf}`
+### POST /auth/register
 
-**Request:**
-```bash
-curl -X GET http://localhost:5000/api/transactions/09620676017
-```
+Registrar novo usuário na plataforma.
 
-**Path Parameters:**
-- `cpf` (string, required): 11-digit CPF number
+**Endpoint**: `POST /api/v1/auth/register`
 
-**Success Response (200 OK):**
-```json
-[
-  {
-    "id": 1,
-    "bankCode": "1",
-    "cpf": "09620676017",
-    "natureCode": "1",
-    "amount": 150.00,
-    "card": "1234****7890",
-    "storeOwner": "JOÃO MACEDO",
-    "storeName": "BAR DO JOÃO",
-    "transactionDate": "2019-03-01T00:00:00Z",
-    "transactionTime": "23:30:00",
-    "createdAt": "2025-12-19T16:30:00Z",
-    "transactionDescription": "Debit",
-    "signedAmount": 150.00
-  },
-  {
-    "id": 2,
-    "bankCode": "2",
-    "cpf": "09620676017",
-    "natureCode": "2",
-    "amount": 142.00,
-    "card": "3153****3453",
-    "storeOwner": "JOÃO MACEDO",
-    "storeName": "BAR DO JOÃO",
-    "transactionDate": "2019-03-01T00:00:00Z",
-    "transactionTime": "15:34:53",
-    "createdAt": "2025-12-19T16:30:00Z",
-    "transactionDescription": "Boleto",
-    "signedAmount": -142.00
-  }
-]
-```
-
-**Empty Result (200 OK):**
-```json
-[]
-```
-
-**Error Response (400 Bad Request):**
+**Body** (JSON):
 ```json
 {
-  "error": "CPF inválido"
+  "username": "user@example.com",
+  "password": "SecurePass123!"
 }
 ```
 
-**Response Fields:**
-- `id`: Unique transaction identifier
-- `bankCode`: Bank/transaction code (1-9)
-- `cpf`: Customer CPF (11 digits)
-- `natureCode`: Transaction nature code (determines income/expense)
-- `amount`: Transaction amount (absolute value)
-- `card`: Card number (partially masked)
-- `storeOwner`: Name of the store owner
-- `storeName`: Name of the store
-- `transactionDate`: Date when transaction occurred (ISO 8601)
-- `transactionTime`: Time when transaction occurred (HH:mm:ss)
-- `createdAt`: Timestamp when record was created in system (ISO 8601)
-- `transactionDescription`: Human-readable transaction type
-- `signedAmount`: Amount with sign (positive for income, negative for expense)
+**Response** (200 OK):
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "550e8400e29b41d4a716446655440000",
+  "username": "user@example.com",
+  "role": "User"
+}
+```
+
+**Exemplo cURL**:
+```bash
+curl -X POST http://localhost:5000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "user@example.com",
+    "password": "SecurePass123!"
+  }'
+```
 
 ---
 
-### 3. Get Balance by CPF
-Calculate and return the total balance for a specific CPF (sum of all signed amounts).
+### POST /auth/login
 
-**Endpoint:** `GET /api/transactions/{cpf}/balance`
+Autenticar usuário com credenciais.
 
-**Request:**
-```bash
-curl -X GET http://localhost:5000/api/transactions/09620676017/balance
-```
+**Endpoint**: `POST /api/v1/auth/login`
 
-**Path Parameters:**
-- `cpf` (string, required): 11-digit CPF number
-
-**Success Response (200 OK):**
+**Body** (JSON):
 ```json
 {
-  "balance": 8.00
+  "username": "user@example.com",
+  "password": "SecurePass123!"
 }
 ```
 
-**Balance Calculation:**
-- Income transactions (types 1, 4, 5, 6, 7, 8): **+** amount
-- Expense transactions (types 2, 3, 9): **-** amount
-- Final balance = sum of all signed amounts
-
-**Example:**
-```
-Debit (type 1):      +150.00
-Boleto (type 2):     -142.00
-Credit (type 4):      +50.00
-Financing (type 3):   -30.00
--------------------------
-Balance:              +28.00
-```
-
-**Error Response (400 Bad Request):**
+**Response** (200 OK):
 ```json
 {
-  "error": "CPF inválido"
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "550e8400e29b41d4a716446655440000",
+  "username": "user@example.com",
+  "role": "User"
 }
 ```
 
 ---
 
-### 4. Clear All Data
-Delete all transactions from the database. **This operation cannot be undone.**
+### GET /auth/github/login
 
-**Endpoint:** `DELETE /api/transactions`
+Iniciar fluxo de autenticação com GitHub.
 
-**Request:**
+**Endpoint**: `GET /api/v1/auth/github/login?redirectUri=URL`
+
+**Exemplo**:
 ```bash
-curl -X DELETE http://localhost:5000/api/transactions
+curl -X GET "http://localhost:5000/api/v1/auth/github/login?redirectUri=http://localhost:3000/auth"
 ```
 
-**Success Response (200 OK):**
+---
+
+### POST /auth/refresh
+
+Renovar access token usando refresh token.
+
+**Endpoint**: `POST /api/v1/auth/refresh`
+
+**Body** (JSON):
+```json
+{
+  "refreshToken": "550e8400e29b41d4a716446655440000"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "550e8400e29b41d4a716446655440000",
+  "username": "user@example.com",
+  "role": "User"
+}
+```
+
+---
+
+### GET /auth/me
+
+Obter perfil do usuário autenticado.
+
+**Endpoint**: `GET /api/v1/auth/me`
+
+**Headers** (OBRIGATÓRIO):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response** (200 OK):
+```json
+{
+  "username": "user@example.com",
+  "role": "User"
+}
+```
+
+---
+
+### POST /auth/logout
+
+Fazer logout (invalidar refresh token).
+
+**Endpoint**: `POST /api/v1/auth/logout`
+
+**Headers**:
+```
+Authorization: Bearer {accessToken}
+```
+
+**Body** (JSON):
+```json
+{
+  "refreshToken": "550e8400e29b41d4a716446655440000"
+}
+```
+
+**Response** (200 OK):
+```json
+{}
+```
+
+---
+
+## Transações
+
+## Transações
+
+### POST /transactions/upload
+
+Fazer upload e processar arquivo CNAB.
+
+**Endpoint**: `POST /api/v1/transactions/upload`
+
+**Headers** (OBRIGATÓRIO):
+```
+Authorization: Bearer {accessToken}
+Content-Type: multipart/form-data
+```
+
+**Body** (multipart/form-data):
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-----------|-----------|
+| file | file (.txt) | Sim | Arquivo CNAB formatado |
+
+**Formato CNAB esperado** (80 caracteres por linha):
+
+Cada linha contém uma transação com 80 caracteres em posições fixas:
+- Posição 0: Tipo de transação (1 char)
+- Posição 1-8: Data (YYYYMMDD)
+- Posição 9-18: Valor (10 dígitos, últimos 2 são decimais)
+- Posição 19-29: CPF (11 caracteres)
+- Posição 30-41: Número do cartão (12 caracteres)
+- Posição 42-47: Hora (HHMMSS)
+- Posição 48-61: Nome do proprietário (14 caracteres)
+- Posição 62-79: Nome da loja (18 caracteres)
+
+**Tipos de transação**:
+- `1` - Débito (Entrada)
+- `2` - Boleto (Saída)
+- `3` - Financiamento (Saída)
+- `4` - Crédito (Entrada)
+- `5` - Recebimento de Empréstimo (Entrada)
+- `6` - Vendas (Entrada)
+- `7` - Recebimento TED (Entrada)
+- `8` - Recebimento DOC (Entrada)
+- `9` - Aluguel (Saída)
+
+**Response** (200 OK):
+```json
+{
+  "message": "Successfully imported 100 transactions",
+  "count": 100
+}
+```
+
+**Response (400 Bad Request)**:
+```json
+{
+  "error": "Arquivo não foi fornecido ou está vazio."
+}
+```
+
+**Exemplo cURL**:
+```bash
+curl -X POST http://localhost:5000/api/v1/transactions/upload \
+  -H "Authorization: Bearer {accessToken}" \
+  -F "file=@cnab.txt"
+```
+
+---
+
+### GET /transactions/{cpf}
+
+Listar transações por CPF com paginação, filtros e ordenação.
+
+**Endpoint**: `GET /api/v1/transactions/{cpf}`
+
+**Path Parameters**:
+| Parâmetro | Tipo | Obrigatório | Exemplo |
+|-----------|------|-----------|---------|
+| cpf | string | Sim | 09620676017 |
+
+**Query Parameters**:
+| Parâmetro | Tipo | Padrão | Exemplo | Descrição |
+|-----------|------|-------|---------|-----------|
+| page | int | 1 | 2 | Número da página |
+| pageSize | int | 50 | 20 | Itens por página |
+| startDate | datetime | - | 2019-01-01 | Filtro data início (ISO 8601) |
+| endDate | datetime | - | 2019-12-31 | Filtro data fim (ISO 8601) |
+| types | string | - | 1,2,3 | Tipos separados por vírgula |
+| sort | string | desc | asc | Ordem: asc (crescente) ou desc (decrescente) |
+
+**Headers** (OBRIGATÓRIO):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response** (200 OK):
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "cpf": "09620676017",
+      "name": "EMPRESA LTDA",
+      "bank": "0001",
+      "branch": "0001",
+      "account": "1234567",
+      "type": 1,
+      "nature": "Crédito",
+      "value": 1250.50,
+      "date": "2019-01-15",
+      "time": "23:30:00",
+      "storeName": "BAR DO JOÃO"
+    }
+  ],
+  "totalCount": 150,
+  "pageSize": 20,
+  "currentPage": 1
+}
+```
+
+**Exemplo cURL**:
+```bash
+curl -X GET "http://localhost:5000/api/v1/transactions/09620676017?page=1&pageSize=50&sort=desc" \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+---
+
+### GET /transactions/{cpf}/balance
+
+Calcular saldo total para um CPF.
+
+**Endpoint**: `GET /api/v1/transactions/{cpf}/balance`
+
+**Path Parameters**:
+| Parâmetro | Tipo | Obrigatório | Exemplo |
+|-----------|------|-----------|---------|
+| cpf | string | Sim | 09620676017 |
+
+**Headers** (OBRIGATÓRIO):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response** (200 OK):
+```json
+{
+  "balance": 1250.75
+}
+```
+
+**Cálculo do saldo**:
+- Transações de entrada (tipos 1, 4, 5, 6, 7, 8): **+** valor
+- Transações de saída (tipos 2, 3, 9): **-** valor
+
+**Exemplo cURL**:
+```bash
+curl -X GET http://localhost:5000/api/v1/transactions/09620676017/balance \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+---
+
+### GET /transactions/{cpf}/search
+
+Buscar transações por descrição (full-text search).
+
+**Endpoint**: `GET /api/v1/transactions/{cpf}/search`
+
+**Query Parameters**:
+| Parâmetro | Tipo | Obrigatório | Exemplo |
+|-----------|------|-----------|---------|
+| searchTerm | string | Sim | LOJA |
+| page | int | Não | 1 |
+| pageSize | int | Não | 20 |
+
+**Headers** (OBRIGATÓRIO):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response** (200 OK):
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "cpf": "09620676017",
+      "name": "LOJA CENTRAL",
+      "value": 500.00,
+      "date": "2019-01-15"
+    }
+  ],
+  "totalCount": 5,
+  "pageSize": 20,
+  "currentPage": 1
+}
+```
+
+**Exemplo cURL**:
+```bash
+curl -X GET "http://localhost:5000/api/v1/transactions/09620676017/search?searchTerm=LOJA" \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+---
+
+### DELETE /transactions
+
+Limpar todas as transações (apenas Admin).
+
+**Endpoint**: `DELETE /api/v1/transactions`
+
+**Headers** (OBRIGATÓRIO):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Autorização**: Requer role `Admin`
+
+**Response** (200 OK):
 ```json
 {
   "message": "All data cleared successfully"
 }
 ```
 
-**Error Response (400 Bad Request):**
+**Exemplo cURL**:
+```bash
+curl -X DELETE http://localhost:5000/api/v1/transactions \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+---
+
+## Códigos de Status
+
+| Status | Descrição | Exemplo |
+|--------|-----------|---------|
+| 200 | OK - Sucesso | Transações retornadas |
+| 302 | Found - Redirecionamento | OAuth GitHub |
+| 400 | Bad Request - Erro de validação | CPF inválido |
+| 401 | Unauthorized - Sem autenticação | Token ausente |
+| 403 | Forbidden - Sem autorização | Não é Admin |
+| 500 | Internal Server Error | Erro no servidor |
+
+---
+
+## Modelos de Dados
+
+### AuthResponse
 ```json
 {
-  "error": "Falha ao limpar dados"
+  "accessToken": "string",
+  "refreshToken": "string",
+  "username": "string",
+  "role": "User | Admin"
 }
 ```
 
-**Warning:** This endpoint deletes **ALL** transaction records permanently. Use with caution.
-
----
-
-## HTTP Status Codes
-
-| Status Code | Description |
-|------------|-------------|
-| 200 OK | Request successful |
-| 400 Bad Request | Invalid input or business logic error |
-| 500 Internal Server Error | Unexpected server error |
-
----
-
-## Error Response Format
-
-All error responses follow this structure:
+### Transaction
 ```json
 {
-  "error": "Description of the error in Portuguese"
+  "id": "integer",
+  "cpf": "string (11 chars)",
+  "name": "string",
+  "bank": "string",
+  "branch": "string",
+  "account": "string",
+  "type": "integer (1-9)",
+  "nature": "string",
+  "value": "decimal",
+  "date": "string (YYYY-MM-DD)",
+  "time": "string (HH:mm:ss)",
+  "storeName": "string"
+}
+```
+
+### PagedResult<T>
+```json
+{
+  "items": "Array<T>",
+  "totalCount": "integer",
+  "pageSize": "integer",
+  "currentPage": "integer"
 }
 ```
 
 ---
 
-## Common Use Cases
+## Exemplos por Caso de Uso
 
-### 1. Import and Query Workflow
+### 1️⃣ Fluxo Completo: Login → Upload → Consultar
+
 ```bash
-# Step 1: Upload CNAB file
-curl -X POST http://localhost:5000/api/transactions/upload \
-  -F "file=@CNAB.txt"
+# 1. Login
+TOKEN=$(curl -s -X POST http://localhost:5000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "user@example.com",
+    "password": "SecurePass123!"
+  }' | jq -r '.accessToken')
 
-# Response: { "message": "Successfully imported 46 transactions", "count": 46 }
+# 2. Upload CNAB
+curl -X POST http://localhost:5000/api/v1/transactions/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@cnab.txt"
 
-# Step 2: Query transactions for a specific CPF
-curl -X GET http://localhost:5000/api/transactions/09620676017
+# 3. Consultar transações
+curl -X GET "http://localhost:5000/api/v1/transactions/09620676017?page=1&pageSize=10" \
+  -H "Authorization: Bearer $TOKEN"
 
-# Step 3: Check balance
-curl -X GET http://localhost:5000/api/transactions/09620676017/balance
-
-# Response: { "balance": 8.00 }
+# 4. Obter saldo
+curl -X GET http://localhost:5000/api/v1/transactions/09620676017/balance \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-### 2. Clear and Re-import
-```bash
-# Step 1: Clear existing data
-curl -X DELETE http://localhost:5000/api/transactions
-
-# Step 2: Import new file
-curl -X POST http://localhost:5000/api/transactions/upload \
-  -F "file=@new_CNAB.txt"
-```
-
----
-
-## Testing with Postman
-
-### 1. Import Collection
-Create a new Postman collection with these endpoints:
-
-**Collection Name:** CNAB Transaction API
-
-**Environment Variables:**
-```
-base_url = http://localhost:5000/api
-test_cpf = 09620676017
-```
-
-### 2. Upload File Request
-- Method: POST
-- URL: `{{base_url}}/transactions/upload`
-- Body: form-data
-  - Key: `file`
-  - Type: File
-  - Value: Select CNAB.txt file
-
-### 3. Get Transactions Request
-- Method: GET
-- URL: `{{base_url}}/transactions/{{test_cpf}}`
-
-### 4. Get Balance Request
-- Method: GET
-- URL: `{{base_url}}/transactions/{{test_cpf}}/balance`
-
-### 5. Clear Data Request
-- Method: DELETE
-- URL: `{{base_url}}/transactions`
-
----
-
-## Frontend Integration
-
-### Example with Axios (React)
+### 2️⃣ Renovar Token Expirado
 
 ```javascript
-import axios from 'axios';
+async function refreshToken() {
+  const response = await fetch('/api/v1/auth/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      refreshToken: localStorage.getItem('refreshToken')
+    })
+  });
+  
+  if (response.ok) {
+    const data = await response.json();
+    localStorage.setItem('accessToken', data.accessToken);
+    return true;
+  }
+  return false;
+}
+```
 
-const API_BASE_URL = 'http://localhost:5000/api';
+### 3️⃣ Filtrar Transações por Data
+
+```bash
+# Transações de crédito (tipo 1) em 2019
+curl -X GET "http://localhost:5000/api/v1/transactions/09620676017?startDate=2019-01-01&endDate=2019-12-31&types=1&sort=desc" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Últimas 5 transações
+curl -X GET "http://localhost:5000/api/v1/transactions/09620676017?page=1&pageSize=5&sort=desc" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 4️⃣ Buscar por Loja
+
+```bash
+curl -X GET "http://localhost:5000/api/v1/transactions/09620676017/search?searchTerm=LOJA" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+**Última atualização**: Dezembro 2025  
+**Versão**: v1.0
 
 // Upload CNAB file
 export const uploadCnabFile = async (file) => {

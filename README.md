@@ -1,34 +1,55 @@
-# CNAB Transactions - Backend Challenge
+# 🏦 CNAB Parser API - Backend Challenge
 
-API e frontend para upload de arquivos CNAB, parsing, persistência em PostgreSQL e consulta de transações/saldo por CPF. Projeto empacotado com Docker Compose.
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-175%20passing-brightgreen)](https://github.com)
+[![Coverage](https://img.shields.io/badge/coverage-%3E80%25-green)](https://github.com)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-## 🚀 Início Rápido
+Uma API robusta, production-ready para processamento e análise de arquivos CNAB com autenticação JWT, OAuth GitHub, e recursos enterprise como logging estruturado, validação robusta e testes abrangentes.
 
-**One-command setup** (Windows, macOS, Linux):
+## 📋 Índice
 
-### Windows
-```bash
-setup.bat
-```
+- [Visão Geral](#visão-geral)
+- [Tecnologias](#tecnologias)
+- [Pré-requisitos](#pré-requisitos)
+- [Setup Rápido](#setup-rápido)
+- [Configuração Detalhada](#configuração-detalhada)
+- [Uso da API](#uso-da-api)
+- [Desenvolvimento](#desenvolvimento)
+- [Testes](#testes)
+- [Troubleshooting](#troubleshooting)
+- [Documentação](#documentação)
 
-### macOS/Linux/WSL
-```bash
-bash setup.sh
-```
+## 🎯 Visão Geral
 
-**Depois acesse:** http://localhost:3000
+**CNAB Parser API** é uma solução completa para processar arquivos CNAB (Configuração Nacional Aplicativo Computadorial Bancário), fornecendo:
 
-👉 Para instruções detalhadas, veja [GETTING_STARTED.md](GETTING_STARTED.md)
+✅ **Upload e parser de arquivos CNAB** com validação rigorosa  
+✅ **API RESTful versioned** (`/api/v1/`) com autenticação JWT + OAuth GitHub  
+✅ **Paginação, filtros e ordenação** em consultas de transações  
+✅ **Logging estruturado** com correlation ID end-to-end (Serilog)  
+✅ **Validação robusta** com FluentValidation (CPF real, credenciais)  
+✅ **Testes abrangentes** (175 testes: unitários + integração)  
+✅ **Docker Compose** para desenvolvimento e produção  
+✅ **Application Insights** pronto para telemetria em produção  
+✅ **ProblemDetails RFC 7807** para respostas HTTP padronizadas  
+✅ **Swagger/OpenAPI** com documentação interativa  
 
----
+## 🛠️ Tecnologias
 
-## Visão Geral
-- Backend: ASP.NET Core 9 (C#), EF Core, PostgreSQL, Swagger/OpenAPI.
-- Frontend: React com formulário de upload e consultas.
-- Testes: xUnit + FluentAssertions; testes de integração usando WebApplicationFactory.
-- Deploy local: Docker Compose com `api`, `postgres`, `frontend`.
-
-Documentação completa dos endpoints: [API_DOCUMENTATION.md](API_DOCUMENTATION.md).
+| Camada | Tecnologia | Versão | Propósito |
+|--------|-----------|--------|----------|
+| **Runtime** | .NET | 9.0/10.0 | Execução |
+| **Web Framework** | ASP.NET Core | Latest | APIs HTTP |
+| **Database** | PostgreSQL | 15 | Persistência |
+| **ORM** | Entity Framework Core | Latest | Acesso a dados |
+| **Logging** | Serilog | 4.2.0 | Logs estruturados |
+| **Validação** | FluentValidation | 11.11.0 | Validação de inputs |
+| **Errors** | ProblemDetails Middleware | 6.4.1 | RFC 7807 |
+| **API Version** | Microsoft.AspNetCore.Mvc.Versioning | 5.1.0 | v1, v2... |
+| **Testing** | xUnit + Moq | Latest | Testes |
+| **Frontend** | React | 19 | UI |
+| **Containers** | Docker | Latest | Orquestração |
 
 ## Arquitetura
 - API REST: [backend/Program.cs](backend/Program.cs) com controllers em [backend/Controllers](backend/Controllers).

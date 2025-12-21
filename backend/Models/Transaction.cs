@@ -37,6 +37,13 @@ public class Transaction
         { "9", "Expense" }
     };
 
+    private static readonly Dictionary<string, decimal> NatureSignMultipliers = new()
+    {
+        { "Income", 1m },
+        { "Expense", -1m },
+        { "Neutral", 0m }
+    };
+
     /// <summary>
     /// Unique identifier for the transaction record.
     /// </summary>
@@ -120,10 +127,8 @@ public class Transaction
     private string GetTransactionNature() =>
         NatureClassifications.TryGetValue(NatureCode, out var nature) ? nature : "Neutral";
 
-    private decimal GetSignedAmount() => GetTransactionNature() switch
-    {
-        "Income" => Amount,
-        "Expense" => -Amount,
-        _ => 0
-    };
+    private decimal GetSignedAmount() =>
+        NatureSignMultipliers.TryGetValue(GetTransactionNature(), out var multiplier)
+            ? Amount * multiplier
+            : 0;
 }

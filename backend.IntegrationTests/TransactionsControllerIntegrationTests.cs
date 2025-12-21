@@ -29,7 +29,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         content.Add(fileContent, "file", "test.txt");
 
         // Act
-        var response = await client.PostAsync("/api/transactions/upload", content);
+        var response = await client.PostAsync("/api/v1/transactions/upload", content);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -50,7 +50,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         content.Add(fileContent, "file", "empty.txt");
 
         // Act
-        var response = await client.PostAsync("/api/transactions/upload", content);
+        var response = await client.PostAsync("/api/v1/transactions/upload", content);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -72,7 +72,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         content.Add(fileContent, "file", "invalid.txt");
 
         // Act
-        var response = await client.PostAsync("/api/transactions/upload", content);
+        var response = await client.PostAsync("/api/v1/transactions/upload", content);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -96,10 +96,10 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "test.txt");
         
-        await client.PostAsync("/api/transactions/upload", uploadContent);
+        await client.PostAsync("/api/v1/transactions/upload", uploadContent);
 
         // Act
-        var response = await client.GetAsync("/api/transactions/09620676017?page=1&pageSize=10");
+        var response = await client.GetAsync("/api/v1/transactions/09620676017?page=1&pageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -117,7 +117,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         var client = await CreateAuthorizedClientAsync();
 
         // Act
-        var response = await client.GetAsync("/api/transactions/99999999999?page=1&pageSize=10");
+        var response = await client.GetAsync("/api/v1/transactions/99999999999?page=1&pageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -145,10 +145,10 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "test.txt");
         
-        await client.PostAsync("/api/transactions/upload", uploadContent);
+        await client.PostAsync("/api/v1/transactions/upload", uploadContent);
 
         // Act
-        var response = await client.GetAsync("/api/transactions/09620676017/balance");
+        var response = await client.GetAsync("/api/v1/transactions/09620676017/balance");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -164,7 +164,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         var client = await CreateAuthorizedClientAsync();
 
         // Act
-        var response = await client.GetAsync("/api/transactions/99999999999/balance");
+        var response = await client.GetAsync("/api/v1/transactions/99999999999/balance");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -186,16 +186,16 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "test.txt");
         
-        await client.PostAsync("/api/transactions/upload", uploadContent);
+        await client.PostAsync("/api/v1/transactions/upload", uploadContent);
 
         // Act
-        var deleteResponse = await client.DeleteAsync("/api/transactions");
+        var deleteResponse = await client.DeleteAsync("/api/v1/transactions");
 
         // Assert
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         
         // Verify data is cleared
-        var getResponse = await client.GetAsync("/api/transactions/09620676017?page=1&pageSize=10");
+        var getResponse = await client.GetAsync("/api/v1/transactions/09620676017?page=1&pageSize=10");
         var transactions = await getResponse.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
         transactions.Should().NotBeNull();
         transactions!.Items.Should().BeEmpty();
@@ -219,41 +219,41 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "workflow.txt");
         
-        var uploadResponse = await client.PostAsync("/api/transactions/upload", uploadContent);
+        var uploadResponse = await client.PostAsync("/api/v1/transactions/upload", uploadContent);
         uploadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         
         var uploadResult = await uploadResponse.Content.ReadFromJsonAsync<UploadResponse>();
         uploadResult!.Count.Should().Be(4);
 
         // Act & Assert - Query CPF 1
-        var queryResponse1 = await client.GetAsync("/api/transactions/09620676017?page=1&pageSize=10");
+        var queryResponse1 = await client.GetAsync("/api/v1/transactions/09620676017?page=1&pageSize=10");
         queryResponse1.StatusCode.Should().Be(HttpStatusCode.OK);
         var transactions1 = await queryResponse1.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
         transactions1!.Items.Count.Should().Be(3);
         transactions1.TotalCount.Should().Be(3);
 
         // Act & Assert - Balance CPF 1
-        var balanceResponse1 = await client.GetAsync("/api/transactions/09620676017/balance");
+        var balanceResponse1 = await client.GetAsync("/api/v1/transactions/09620676017/balance");
         var balance1 = await balanceResponse1.Content.ReadFromJsonAsync<BalanceResponse>();
         balance1!.Balance.Should().Be(-102.00m); // 152 - 112 - 142 = -102
 
         // Act & Assert - Query CPF 2
-        var queryResponse2 = await client.GetAsync("/api/transactions/84515254073?page=1&pageSize=10");
+        var queryResponse2 = await client.GetAsync("/api/v1/transactions/84515254073?page=1&pageSize=10");
         var transactions2 = await queryResponse2.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
         transactions2!.Items.Count.Should().Be(1);
         transactions2.TotalCount.Should().Be(1);
 
         // Act & Assert - Balance CPF 2
-        var balanceResponse2 = await client.GetAsync("/api/transactions/84515254073/balance");
+        var balanceResponse2 = await client.GetAsync("/api/v1/transactions/84515254073/balance");
         var balance2 = await balanceResponse2.Content.ReadFromJsonAsync<BalanceResponse>();
         balance2!.Balance.Should().Be(506.17m);
 
         // Act & Assert - Clear
-        var clearResponse = await client.DeleteAsync("/api/transactions");
+        var clearResponse = await client.DeleteAsync("/api/v1/transactions");
         clearResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Verify all data cleared
-        var finalQuery = await client.GetAsync("/api/transactions/09620676017?page=1&pageSize=10");
+        var finalQuery = await client.GetAsync("/api/v1/transactions/09620676017?page=1&pageSize=10");
         var finalTransactions = await finalQuery.Content.ReadFromJsonAsync<PagedTransactionsResponse>();
         finalTransactions!.Items.Should().BeEmpty();
         finalTransactions.TotalCount.Should().Be(0);
@@ -271,7 +271,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
             Password = "Admin123!"
         };
 
-        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", loginRequest);
+        var loginResponse = await client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var auth = await loginResponse.Content.ReadFromJsonAsync<AuthResponse>();

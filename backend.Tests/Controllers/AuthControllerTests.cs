@@ -3,6 +3,7 @@ using CnabApi.Models;
 using CnabApi.Services.Auth;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace CnabApi.Tests.Controllers;
@@ -13,11 +14,12 @@ namespace CnabApi.Tests.Controllers;
 public class AuthControllerTests
 {
     private readonly Mock<IAuthService> _authServiceMock = new();
+    private readonly Mock<ILogger<AuthController>> _loggerMock = new();
     private readonly AuthController _controller;
 
     public AuthControllerTests()
     {
-        _controller = new AuthController(_authServiceMock.Object);
+        _controller = new AuthController(_authServiceMock.Object, _loggerMock.Object);
     }
 
     [Fact]

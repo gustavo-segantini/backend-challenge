@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using CnabApi.Models;
 using CnabApi.Services.Auth;
 
 namespace CnabApi.Controllers;

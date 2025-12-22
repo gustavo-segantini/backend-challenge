@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using Microsoft.Extensions.Options;
 using CnabApi.Models;
 using CnabApi.Options;
 using CnabApi.Services.Auth;

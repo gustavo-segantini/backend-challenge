@@ -1,4 +1,5 @@
 using CnabApi.Utilities;
+using Serilog.Context;
 
 namespace CnabApi.Middleware;
 
@@ -27,6 +28,10 @@ public class CorrelationIdMiddleware
         context.Items["CorrelationId"] = correlationId;
         context.Response.Headers.Append(correlationIdHeader, correlationId);
 
-        await _next(context);
+        // Add CorrelationId to the Serilog LogContext for all logs in this request scope
+        using (LogContext.PushProperty("CorrelationId", correlationId))
+        {
+            await _next(context);
+        }
     }
 }

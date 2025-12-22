@@ -1,26 +1,21 @@
 using System.Diagnostics.CodeAnalysis;
 using Serilog;
 using CnabApi.Extensions;
-using Hellang.Middleware.ProblemDetails;
+using CnabApi.Middleware;
 
-// Configure Serilog
+// Initial bootstrap logger (before configuration is loaded)
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
-    .Enrich.FromLogContext()
-    .Enrich.WithProperty("Application", "CnabApi")
-    .Enrich.WithMachineName()
-    .WriteTo.Console(outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] [CorrelationId: {CorrelationId}] {Message:lj}{NewLine}{Exception}")
-    .WriteTo.File(
-        path: "logs/cnab-api-.txt",
-        rollingInterval: RollingInterval.Day,
-        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] [CorrelationId: {CorrelationId}] {Message:lj}{NewLine}{Exception}",
-        retainedFileCountLimit: 30)
-    .CreateLogger();
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
 try
 {
     var builder = WebApplication.CreateBuilder(args);
-    builder.Host.UseSerilog();
+    
+    // Configure Serilog from appsettings.json
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .Enrich.With<CorrelationIdEnricher>());
 
     // ========== Configure Services ==========
     
@@ -58,6 +53,7 @@ try
     var app = builder.Build();
 
     app.UseCorrelationIdMiddleware();
+    app.UseSerilogRequestLogging(); // Use Serilog for request logging (respects LogContext)
     app.UseExceptionHandlingMiddleware();
     app.UseResponseCompression();
     app.UseSwaggerConfiguration();

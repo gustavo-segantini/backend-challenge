@@ -1,6 +1,5 @@
 using CnabApi.Middleware;
 using CnabApi.Utilities;
-using FluentAssertions;
 using Moq;
 using Serilog.Core;
 using Serilog.Events;

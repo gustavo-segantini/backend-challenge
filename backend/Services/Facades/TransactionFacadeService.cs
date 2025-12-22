@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.WebUtilities;
 using CnabApi.Common;
 using CnabApi.Models;
-using CnabApi.Services;
 
 namespace CnabApi.Services.Facades;
 
@@ -9,30 +8,17 @@ namespace CnabApi.Services.Facades;
 /// Facade service that orchestrates transaction operations and business logic.
 /// This keeps controllers thin by handling all validation, orchestration, and error mapping.
 /// </summary>
-public class TransactionFacadeService : ITransactionFacadeService
+public class TransactionFacadeService(
+    ICnabUploadService uploadService,
+    ITransactionService transactionService,
+    IFileUploadService fileUploadService,
+    ILogger<TransactionFacadeService> logger) : ITransactionFacadeService
 {
-    private readonly ICnabUploadService _uploadService;
-    private readonly ITransactionService _transactionService;
-    private readonly IFileUploadService _fileUploadService;
-    private readonly ILogger<TransactionFacadeService> _logger;
-
-    public TransactionFacadeService(
-        ICnabUploadService uploadService,
-        ITransactionService transactionService,
-        IFileUploadService fileUploadService,
-        ILogger<TransactionFacadeService> logger)
-    {
-        _uploadService = uploadService;
-        _transactionService = transactionService;
-        _fileUploadService = fileUploadService;
-        _logger = logger;
-    }
-
     public async Task<Result<UploadResult>> UploadCnabFileAsync(HttpRequest request, CancellationToken cancellationToken)
     {
         try
         {
-            _logger.LogInformation("Starting CNAB file upload process");
+            logger.LogInformation("Starting CNAB file upload process");
 
             // Extract and validate multipart boundary
             var boundary = GetMultipartBoundary(request);
@@ -44,11 +30,11 @@ public class TransactionFacadeService : ITransactionFacadeService
             var reader = new MultipartReader(boundary, request.Body);
 
             // Use FileUploadService to read and validate the file
-            var fileResult = await _fileUploadService.ReadCnabFileFromMultipartAsync(reader, cancellationToken);
+            var fileResult = await fileUploadService.ReadCnabFileFromMultipartAsync(reader, cancellationToken);
 
             if (!fileResult.IsSuccess)
             {
-                _logger.LogWarning("File upload validation failed. Error: {Error}", fileResult.ErrorMessage);
+                logger.LogWarning("File upload validation failed. Error: {Error}", fileResult.ErrorMessage);
                 
                 // Map error type to appropriate status code
                 var statusCode = DetermineUploadStatusCode(fileResult.ErrorMessage);
@@ -61,11 +47,11 @@ public class TransactionFacadeService : ITransactionFacadeService
             }
 
             // Process the uploaded file content
-            var result = await _uploadService.ProcessCnabUploadAsync(fileResult.Data!, cancellationToken);
+            var result = await uploadService.ProcessCnabUploadAsync(fileResult.Data!, cancellationToken);
 
             if (!result.IsSuccess)
             {
-                _logger.LogWarning("CNAB file upload failed. Error: {Error}", result.ErrorMessage);
+                logger.LogWarning("CNAB file upload failed. Error: {Error}", result.ErrorMessage);
                 
                 // Check if it's a content validation error (422) or general error (400)
                 var statusCode = result.ErrorMessage?.Contains("invalid", StringComparison.OrdinalIgnoreCase) ?? false
@@ -80,7 +66,7 @@ public class TransactionFacadeService : ITransactionFacadeService
                 return Result<UploadResult>.Failure(result.ErrorMessage ?? "Unknown error during upload", uploadResult);
             }
 
-            _logger.LogInformation("CNAB file upload completed successfully. Transactions imported: {Count}", result.Data);
+            logger.LogInformation("CNAB file upload completed successfully. Transactions imported: {Count}", result.Data);
 
             return Result<UploadResult>.Success(new UploadResult
             {
@@ -90,7 +76,7 @@ public class TransactionFacadeService : ITransactionFacadeService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error during CNAB file upload");
+            logger.LogError(ex, "Unexpected error during CNAB file upload");
             return Result<UploadResult>.Failure($"An unexpected error occurred: {ex.Message}");
         }
     }
@@ -105,7 +91,7 @@ public class TransactionFacadeService : ITransactionFacadeService
         string sort,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation(
+        logger.LogInformation(
             "Retrieving transactions for CPF: {Cpf}. Page: {Page}, PageSize: {PageSize}, StartDate: {StartDate}, EndDate: {EndDate}, Types: {Types}",
             cpf, page, pageSize, startDate, endDate, types);
 
@@ -126,15 +112,15 @@ public class TransactionFacadeService : ITransactionFacadeService
                 SortDirection = sort
             };
 
-            var result = await _transactionService.GetTransactionsByCpfAsync(queryOptions, cancellationToken);
+            var result = await transactionService.GetTransactionsByCpfAsync(queryOptions, cancellationToken);
 
             if (!result.IsSuccess)
             {
-                _logger.LogWarning("Failed to retrieve transactions for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
+                logger.LogWarning("Failed to retrieve transactions for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
                 return Result<PagedResult<Transaction>>.Failure(result.ErrorMessage ?? "Failed to retrieve transactions");
             }
 
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Successfully retrieved transactions for CPF: {Cpf}. Count: {Count}, TotalCount: {TotalCount}",
                 cpf, result.Data?.Items.Count, result.Data?.TotalCount);
 
@@ -142,32 +128,32 @@ public class TransactionFacadeService : ITransactionFacadeService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error retrieving transactions for CPF: {Cpf}", cpf);
+            logger.LogError(ex, "Unexpected error retrieving transactions for CPF: {Cpf}", cpf);
             return Result<PagedResult<Transaction>>.Failure($"An unexpected error occurred: {ex.Message}");
         }
     }
 
     public async Task<Result<decimal>> GetBalanceByCpfAsync(string cpf, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Calculating balance for CPF: {Cpf}", cpf);
+        logger.LogInformation("Calculating balance for CPF: {Cpf}", cpf);
 
         try
         {
-            var result = await _transactionService.GetBalanceByCpfAsync(cpf, cancellationToken);
+            var result = await transactionService.GetBalanceByCpfAsync(cpf, cancellationToken);
 
             if (!result.IsSuccess)
             {
-                _logger.LogWarning("Failed to calculate balance for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
+                logger.LogWarning("Failed to calculate balance for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
                 return Result<decimal>.Failure(result.ErrorMessage ?? "Failed to calculate balance");
             }
 
-            _logger.LogInformation("Successfully calculated balance for CPF: {Cpf}. Balance: {Balance}", cpf, result.Data);
+            logger.LogInformation("Successfully calculated balance for CPF: {Cpf}. Balance: {Balance}", cpf, result.Data);
 
             return Result<decimal>.Success(result.Data);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error calculating balance for CPF: {Cpf}", cpf);
+            logger.LogError(ex, "Unexpected error calculating balance for CPF: {Cpf}", cpf);
             return Result<decimal>.Failure($"An unexpected error occurred: {ex.Message}");
         }
     }
@@ -179,24 +165,24 @@ public class TransactionFacadeService : ITransactionFacadeService
         int pageSize,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation(
+        logger.LogInformation(
             "Searching transactions for CPF: {Cpf}. SearchTerm: {SearchTerm}, Page: {Page}, PageSize: {PageSize}",
             cpf, searchTerm, page, pageSize);
 
         try
         {
-            var result = await _transactionService.SearchTransactionsByDescriptionAsync(
+            var result = await transactionService.SearchTransactionsByDescriptionAsync(
                 cpf, searchTerm, page, pageSize, cancellationToken);
 
             if (!result.IsSuccess)
             {
-                _logger.LogWarning(
+                logger.LogWarning(
                     "Search failed for CPF: {Cpf}, SearchTerm: {SearchTerm}. Error: {Error}",
                     cpf, searchTerm, result.ErrorMessage);
                 return Result<PagedResult<Transaction>>.Failure(result.ErrorMessage ?? "Search failed");
             }
 
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Search completed for CPF: {Cpf}, SearchTerm: {SearchTerm}. Results: {Count}",
                 cpf, searchTerm, result.Data?.Items.Count);
 
@@ -204,32 +190,32 @@ public class TransactionFacadeService : ITransactionFacadeService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error searching transactions for CPF: {Cpf}, SearchTerm: {SearchTerm}", cpf, searchTerm);
+            logger.LogError(ex, "Unexpected error searching transactions for CPF: {Cpf}, SearchTerm: {SearchTerm}", cpf, searchTerm);
             return Result<PagedResult<Transaction>>.Failure($"An unexpected error occurred: {ex.Message}");
         }
     }
 
     public async Task<Result> ClearAllDataAsync(CancellationToken cancellationToken)
     {
-        _logger.LogWarning("Admin initiated data clear operation");
+        logger.LogWarning("Admin initiated data clear operation");
 
         try
         {
-            var result = await _transactionService.ClearAllDataAsync(cancellationToken);
+            var result = await transactionService.ClearAllDataAsync(cancellationToken);
 
             if (!result.IsSuccess)
             {
-                _logger.LogError("Failed to clear data. Error: {Error}", result.ErrorMessage);
+                logger.LogError("Failed to clear data. Error: {Error}", result.ErrorMessage);
                 return Result.Failure(result.ErrorMessage ?? "Failed to clear data");
             }
 
-            _logger.LogInformation("Data cleared successfully");
+            logger.LogInformation("Data cleared successfully");
 
             return Result.Success();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error during data clear operation");
+            logger.LogError(ex, "Unexpected error during data clear operation");
             return Result.Failure($"An unexpected error occurred: {ex.Message}");
         }
     }

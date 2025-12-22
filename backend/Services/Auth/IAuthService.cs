@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using CnabApi.Models;
 
 namespace CnabApi.Services.Auth;
 

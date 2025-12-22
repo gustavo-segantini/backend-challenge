@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using Polly;
 
 namespace CnabApi.Services.Resilience;

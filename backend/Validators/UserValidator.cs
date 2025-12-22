@@ -3,5 +3,3 @@
 // - Validators/LoginRequestValidator.cs
 
 // For backward compatibility:
-global using RegisterRequestValidator = CnabApi.Validators.RegisterRequestValidator;
-global using LoginRequestValidator = CnabApi.Validators.LoginRequestValidator;

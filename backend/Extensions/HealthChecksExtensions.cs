@@ -1,6 +1,3 @@
-using HealthChecks.NpgSql;
-using HealthChecks.Redis;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Prometheus;
 using System.Diagnostics.CodeAnalysis;

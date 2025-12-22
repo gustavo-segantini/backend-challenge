@@ -1,5 +1,4 @@
 using FluentValidation;
-using CnabApi.Models.Requests;
 
 namespace CnabApi.Validators;
 

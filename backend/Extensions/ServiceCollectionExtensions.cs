@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using FluentValidation;
-using Scrutor;
 using System.Reflection;
 using System.Text;
 using System.Net.Http.Headers;

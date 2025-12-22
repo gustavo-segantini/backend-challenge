@@ -1,6 +1,4 @@
-using FluentValidation;
 using FluentValidation.TestHelper;
-using Xunit;
 using CnabApi.Models;
 using CnabApi.Validators;
 

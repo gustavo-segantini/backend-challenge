@@ -8,13 +8,6 @@ using CnabApi.Options;
 
 namespace CnabApi.Services.Auth;
 
-public interface ITokenService
-{
-    string GenerateAccessToken(User user);
-    RefreshToken GenerateRefreshToken();
-    ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
-}
-
 /// <summary>
 /// Service responsible for issuing JWT access tokens and refresh tokens.
 /// </summary>

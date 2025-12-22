@@ -47,7 +47,7 @@ public class TransactionsControllerTests
         var method = typeof(TransactionsController).GetMethod("UploadCnabFile");
         method.Should().NotBeNull();
         
-        var httpPost = method!.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.HttpPostAttribute), false);
+        var httpPost = method!.GetCustomAttributes(typeof(HttpPostAttribute), false);
         httpPost.Should().NotBeEmpty();
     }
 

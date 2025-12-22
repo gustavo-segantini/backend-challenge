@@ -281,7 +281,7 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p>&copy; 2024 Transaction Manager. All rights reserved.</p>
+        <p>&copy; 2025 Transaction Manager. All rights reserved.</p>
       </footer>
     </div>
   );

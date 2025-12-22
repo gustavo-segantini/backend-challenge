@@ -6,15 +6,8 @@ namespace CnabApi.Middleware;
 /// <summary>
 /// Middleware that captures or creates a correlation ID for each request.
 /// </summary>
-public class CorrelationIdMiddleware
+public class CorrelationIdMiddleware(RequestDelegate next)
 {
-    private readonly RequestDelegate _next;
-
-    public CorrelationIdMiddleware(RequestDelegate next)
-    {
-        _next = next;
-    }
-
     public async Task InvokeAsync(HttpContext context)
     {
         const string correlationIdHeader = "X-Correlation-ID";
@@ -31,7 +24,7 @@ public class CorrelationIdMiddleware
         // Add CorrelationId to the Serilog LogContext for all logs in this request scope
         using (LogContext.PushProperty("CorrelationId", correlationId))
         {
-            await _next(context);
+            await next(context);
         }
     }
 }

@@ -1,8 +1,8 @@
 # 🏦 CNAB Parser API - Backend Challenge
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
-[![Tests](https://img.shields.io/badge/tests-268%20passing-brightgreen)](https://github.com)
-[![Coverage](https://img.shields.io/badge/coverage-86.7%25-brightgreen)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-370%20passing-brightgreen)](https://github.com)
+[![Coverage](https://img.shields.io/badge/coverage-89.11%25-brightgreen)](https://github.com)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 A robust, production-ready API for processing and analyzing CNAB files with JWT authentication, GitHub OAuth, and enterprise-grade features like structured logging, robust validation, and comprehensive tests.
@@ -29,7 +29,7 @@ A robust, production-ready API for processing and analyzing CNAB files with JWT 
 ✅ **Pagination, filtering, and sorting** on transaction queries  
 ✅ **Structured logging** with end-to-end correlation ID (Serilog)  
 ✅ **Robust validation** with FluentValidation (real CPF, credentials)  
-✅ **Comprehensive tests** (268 tests with 86.7% coverage)  
+✅ **Comprehensive tests** (370 tests with 89.11% coverage)  
 ✅ **Docker Compose** for development and production  
 ✅ **Application Insights** ready for production telemetry  
 ✅ **ProblemDetails RFC 7807** for standardized HTTP responses  
@@ -192,7 +192,7 @@ dotnet test backend.IntegrationTests/CnabApi.IntegrationTests.csproj
 
 ### Code Coverage
 
-The project has **86.7% line coverage**, **77.27% branch coverage**, and **90.5% method coverage** (268 tests).
+The project has **89.11% line coverage**, **73.22% branch coverage**, and **93.22% method coverage** (370 tests).
 
 #### Generate Coverage Report
 
@@ -335,8 +335,8 @@ backend-challenge/
 └── SETUP_VERIFICATION.md       # Verification checklist
 ```
 
-**Total tests**: 268 (xUnit + Moq)  
-**Coverage**: 86.7% line, 77.27% branch, 90.5% method
+**Total tests**: 370 (xUnit + Moq)  
+**Coverage**: 89.11% line, 73.22% branch, 93.22% method
 
 ## 📚 Documentation
 
@@ -350,6 +350,43 @@ backend-challenge/
 - **Cache**: Redis for performance
 - **Testing**: xUnit + Moq + WebApplicationFactory
 - **Deploy**: Docker Compose with health checks
+
+## 🗄️ Database Performance & Tuning
+
+### Indexes
+The following indexes are automatically created via EF Core migrations to optimize query performance:
+
+| Index | Table | Columns | Purpose |
+|-------|-------|---------|---------|
+| `IX_Transactions_Cpf` | Transactions | Cpf | Fast lookups by CPF (most common query) |
+| `IX_Transactions_NatureCode` | Transactions | NatureCode | Filter by transaction type |
+| `IX_RefreshTokens_UserId` | RefreshTokens | UserId | JWT refresh token lookups |
+| `IX_RefreshTokens_Token` | RefreshTokens | Token | Token validation |
+
+**Migration Reference**: [20251219190000_AddTransactionIndexes.cs](backend/Data/Migrations/20251219190000_AddTransactionIndexes.cs)
+
+### Idempotency Strategy
+- **Hash-based keys**: `SHA256(file_content + line_index)` prevents duplicate imports
+- **Database constraint**: Unique index on `IdempotencyKey` column
+- **Retry-safe**: Failed batches can be reprocessed without duplicates
+
+**Migration Reference**: [20251222162817_AddIdempotencyKey.cs](backend/Data/Migrations/20251222162817_AddIdempotencyKey.cs)
+
+### Resilience & Retry Policies
+Polly-based retry policies with exponential backoff for transient failures:
+
+- **Database operations**: 3 retries (2s, 4s, 8s delays)
+- **File operations**: 3 retries (500ms, 1s, 2s delays)
+- **HTTP clients**: Circuit breaker + jitter
+
+**Implementation**: [ResiliencePolicies.cs](backend/Services/Resilience/ResiliencePolicies.cs)
+
+### Performance Optimizations
+- ✅ **Streaming upload**: MultipartReader prevents memory overflow on large files
+- ✅ **Batch processing**: EF Core `AddRange()` + single `SaveChanges()`
+- ✅ **Connection pooling**: Default ADO.NET pool (min=0, max=100)
+- ✅ **Query optimization**: Includes/projections to avoid N+1
+- ✅ **Pagination**: Cursor-based for large result sets
 
 ## License
 

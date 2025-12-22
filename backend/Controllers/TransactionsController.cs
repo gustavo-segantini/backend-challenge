@@ -1,14 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using CnabApi.Models;
+using CnabApi.Services.Facades;
 using CnabApi.Services;
+using CnabApi.Extensions;
 
 namespace CnabApi.Controllers;
 
 /// <summary>
 /// API controller for managing CNAB file uploads and transaction queries.
 /// 
-/// This controller handles:
+/// This controller handles HTTP request/response mapping and delegates
+/// all business logic to the TransactionFacadeService.
+/// 
+/// Responsibilities:
 /// - CNAB file uploads and parsing
 /// - Transaction queries with advanced filtering and pagination
 /// - Balance calculations by CPF
@@ -20,21 +25,19 @@ namespace CnabApi.Controllers;
 [ApiVersion("1.0")]
 [Tags("Transactions")]
 public class TransactionsController(
-    ICnabUploadService uploadService,
-    ITransactionService transactionService,
+    ITransactionFacadeService facadeService,
     ILogger<TransactionsController> logger) : ControllerBase
 {
-    private readonly ICnabUploadService _uploadService = uploadService;
-    private readonly ITransactionService _transactionService = transactionService;
+    private readonly ITransactionFacadeService _facadeService = facadeService;
     private readonly ILogger<TransactionsController> _logger = logger;
 
     /// <summary>
     /// Uploads a CNAB file, parses transactions, and stores them in the database.
     /// 
-    /// Expects a CNAB-formatted text file with 240-character lines per transaction.
+    /// Expects a CNAB-formatted text file with fixed-width fields per transaction line.
     /// Each line is parsed and validated against CNAB specifications.
+    /// Uses streaming approach with MultipartReader for efficient memory usage.
     /// </summary>
-    /// <param name="file">The CNAB file to upload (format: .txt, max 10MB).</param>
     /// <param name="cancellationToken">Token to cancel the request.</param>
     /// <returns>Success message with transaction count or error details.</returns>
     /// <remarks>
@@ -44,7 +47,7 @@ public class TransactionsController(
     /// Authorization: Bearer {token}
     /// Content-Type: multipart/form-data
     /// 
-    /// file: [CNAB format text file]
+    /// file: [CNAB format text file, up to 1GB]
     /// ```
     /// 
     /// **Sample Response (200):**
@@ -58,48 +61,42 @@ public class TransactionsController(
     /// **Error Cases:**
     /// - 400: File is empty, invalid format, or contains malformed records
     /// - 401: Missing or invalid authentication token
-    /// - 413: File too large (exceeds 10MB)
+    /// - 413: File too large (exceeds 1GB)
+    /// - 415: Unsupported media type
+    /// - 422: Invalid CNAB content
     /// </remarks>
     [HttpPost("upload")]
     [Authorize]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status415UnsupportedMediaType)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status422UnprocessableEntity)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> UploadCnabFile(IFormFile file, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadCnabFile(CancellationToken cancellationToken)
     {
-        try
+        var result = await _facadeService.UploadCnabFileAsync(Request, cancellationToken);
+
+        if (!result.IsSuccess)
         {
-            _logger.LogInformation("Starting CNAB file upload process. File: {FileName}, Size: {FileSize} bytes", 
-                file?.FileName, file?.Length);
-
-            if (file == null)
+            var errorResponse = new { error = result.ErrorMessage };
+            
+            return result.Data?.StatusCode switch
             {
-                _logger.LogWarning("File reading failed: {Error}", "Arquivo não foi fornecido ou está vazio.");
-                return BadRequest(new { error = "Arquivo não foi fornecido ou está vazio." });
-            }
-
-            var result = await _uploadService.ProcessCnabUploadAsync(file, cancellationToken);
-
-            if (!result.IsSuccess)
-            {
-                _logger.LogWarning("CNAB file upload failed. Error: {Error}", result.ErrorMessage);
-                return BadRequest(new { error = result.ErrorMessage });
-            }
-
-            _logger.LogInformation("CNAB file upload completed successfully. Transactions imported: {Count}", result.Data);
-
-            return Ok(new
-            {
-                message = $"Successfully imported {result.Data} transactions",
-                count = result.Data
-            });
+                UploadStatusCode.BadRequest => BadRequest(errorResponse),
+                UploadStatusCode.UnsupportedMediaType => this.UnsupportedMediaType(result.ErrorMessage!),
+                UploadStatusCode.PayloadTooLarge => this.FileTooLarge(result.ErrorMessage!),
+                UploadStatusCode.UnprocessableEntity => this.UnprocessableEntity(result.ErrorMessage!),
+                _ => BadRequest(errorResponse)
+            };
         }
-        catch (Exception ex)
+
+        return Ok(new
         {
-            _logger.LogError(ex, "Unexpected error during CNAB file upload");
-            throw;
-        }
+            message = $"Successfully imported {result.Data!.TransactionCount} transactions",
+            count = result.Data.TransactionCount
+        });
     }
 
     /// <summary>
@@ -154,6 +151,7 @@ public class TransactionsController(
     /// - 401: Missing or invalid authentication token
     /// - 404: No transactions found for the provided CPF
     /// </remarks>
+    
     [HttpGet("{cpf}")]
     [Authorize]
     [ProducesResponseType(typeof(PagedResult<Transaction>), StatusCodes.Status200OK)]
@@ -170,44 +168,12 @@ public class TransactionsController(
         [FromQuery] string sort = "desc",
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Retrieving transactions for CPF: {Cpf}. Page: {Page}, PageSize: {PageSize}, StartDate: {StartDate}, EndDate: {EndDate}, Types: {Types}",
-            cpf, page, pageSize, startDate, endDate, types);
+        var result = await _facadeService.GetTransactionsByCpfAsync(
+            cpf, page, pageSize, startDate, endDate, types, sort, cancellationToken);
 
-        try
-        {
-            var natureCodes = string.IsNullOrWhiteSpace(types)
-                ? new List<string>()
-                : types.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-
-            var queryOptions = new TransactionQueryOptions
-            {
-                Cpf = cpf,
-                Page = page,
-                PageSize = pageSize,
-                StartDate = startDate,
-                EndDate = endDate,
-                NatureCodes = natureCodes,
-                SortDirection = sort
-            };
-
-            var result = await _transactionService.GetTransactionsByCpfAsync(queryOptions, cancellationToken);
-            
-            if (!result.IsSuccess)
-            {
-                _logger.LogWarning("Failed to retrieve transactions for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
-                return BadRequest(new { error = result.ErrorMessage });
-            }
-
-            _logger.LogInformation("Successfully retrieved transactions for CPF: {Cpf}. Count: {Count}, TotalCount: {TotalCount}",
-                cpf, result.Data?.Items.Count, result.Data?.TotalCount);
-
-            return Ok(result.Data);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error retrieving transactions for CPF: {Cpf}", cpf);
-            throw;
-        }
+        return result.IsSuccess
+            ? Ok(result.Data)
+            : BadRequest(new { error = result.ErrorMessage });
     }
 
     /// <summary>
@@ -247,27 +213,11 @@ public class TransactionsController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<object>> GetBalance(string cpf, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Calculating balance for CPF: {Cpf}", cpf);
+        var result = await _facadeService.GetBalanceByCpfAsync(cpf, cancellationToken);
 
-        try
-        {
-            var result = await _transactionService.GetBalanceByCpfAsync(cpf, cancellationToken);
-            
-            if (!result.IsSuccess)
-            {
-                _logger.LogWarning("Failed to calculate balance for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
-                return BadRequest(new { error = result.ErrorMessage });
-            }
-
-            _logger.LogInformation("Successfully calculated balance for CPF: {Cpf}. Balance: {Balance}", cpf, result.Data);
-
-            return Ok(new { balance = result.Data });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error calculating balance for CPF: {Cpf}", cpf);
-            throw;
-        }
+        return result.IsSuccess
+            ? Ok(new { balance = result.Data })
+            : BadRequest(new { error = result.ErrorMessage });
     }
 
     /// <summary>
@@ -323,34 +273,12 @@ public class TransactionsController(
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Searching transactions for CPF: {Cpf}. SearchTerm: {SearchTerm}, Page: {Page}, PageSize: {PageSize}",
-            cpf, searchTerm, page, pageSize);
+        var result = await _facadeService.SearchTransactionsByDescriptionAsync(
+            cpf, searchTerm, page, pageSize, cancellationToken);
 
-        try
-        {
-            var result = await _transactionService.SearchTransactionsByDescriptionAsync(
-                cpf,
-                searchTerm,
-                page,
-                pageSize,
-                cancellationToken);
-
-            if (!result.IsSuccess)
-            {
-                _logger.LogWarning("Search failed for CPF: {Cpf}, SearchTerm: {SearchTerm}. Error: {Error}", cpf, searchTerm, result.ErrorMessage);
-                return BadRequest(new { error = result.ErrorMessage });
-            }
-
-            _logger.LogInformation("Search completed for CPF: {Cpf}, SearchTerm: {SearchTerm}. Results: {Count}",
-                cpf, searchTerm, result.Data?.Items.Count);
-
-            return Ok(result.Data);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error searching transactions for CPF: {Cpf}, SearchTerm: {SearchTerm}", cpf, searchTerm);
-            throw;
-        }
+        return result.IsSuccess
+            ? Ok(result.Data)
+            : BadRequest(new { error = result.ErrorMessage });
     }
 
     /// <summary>
@@ -365,26 +293,10 @@ public class TransactionsController(
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ClearData(CancellationToken cancellationToken)
     {
-        _logger.LogWarning("Admin initiated data clear operation");
+        var result = await _facadeService.ClearAllDataAsync(cancellationToken);
 
-        try
-        {
-            var result = await _transactionService.ClearAllDataAsync(cancellationToken);
-            
-            if (!result.IsSuccess)
-            {
-                _logger.LogError("Failed to clear data. Error: {Error}", result.ErrorMessage);
-                return BadRequest(new { error = result.ErrorMessage });
-            }
-
-            _logger.LogInformation("Data cleared successfully");
-
-            return Ok(new { message = "All data cleared successfully" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error during data clear operation");
-            throw;
-        }
+        return result.IsSuccess
+            ? Ok(new { message = "All data cleared successfully" })
+            : BadRequest(new { error = result.ErrorMessage });
     }
 }

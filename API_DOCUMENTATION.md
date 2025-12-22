@@ -664,10 +664,10 @@ O projeto mantém alta cobertura de testes para garantir qualidade e confiabilid
 
 | Métrica | Valor | Status |
 |---------|-------|--------|
-| **Line Coverage** | 86.7% | ✅ Excelente |
-| **Branch Coverage** | 77.27% | ✅ Muito Bom |
-| **Method Coverage** | 90.5% | ✅ Excelente |
-| **Total de Testes** | 268 | - |
+| **Line Coverage** | 89.11% | ✅ Excelente |
+| **Branch Coverage** | 73.22% | ✅ Muito Bom |
+| **Method Coverage** | 93.22% | ✅ Excelente |
+| **Total de Testes** | 370 | - |
 
 ### Executar Testes
 
@@ -725,7 +725,7 @@ Isso garante que as métricas refletem apenas **código de negócio testável**.
   - Balance calculation
   - Data clearing functionality
   - Store information support
-  - 86.7% test coverage (268 tests)
+  - 89.11% test coverage (370 tests)
 
 ---
 

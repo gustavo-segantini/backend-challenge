@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json.Serialization;
 using FluentAssertions;
 using CnabApi.Models;
 
@@ -25,7 +26,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         content.Add(fileContent, "file", "test.txt");
 
         // Act
@@ -46,7 +47,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         var client = await CreateAuthorizedClientAsync();
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Array.Empty<byte>());
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         content.Add(fileContent, "file", "empty.txt");
 
         // Act
@@ -56,7 +57,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var result = await response.Content.ReadFromJsonAsync<ErrorResponse>();
         result.Should().NotBeNull();
-        result!.Error.Should().Contain("vazio");
+        result!.Error.Should().Contain("not provided or is empty");
     }
 
     [Fact]
@@ -68,17 +69,17 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         content.Add(fileContent, "file", "invalid.txt");
 
         // Act
         var response = await client.PostAsync("/api/v1/transactions/upload", content);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var result = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-        result.Should().NotBeNull();
-        result!.Error.Should().Contain("80 caracteres");
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        var responseContent = await response.Content.ReadAsStringAsync();
+        responseContent.Should().Contain("Invalid line");
+        responseContent.Should().Contain("80");
     }
 
     [Fact]
@@ -93,7 +94,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         
         var uploadContent = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "test.txt");
         
         await client.PostAsync("/api/v1/transactions/upload", uploadContent);
@@ -142,7 +143,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         
         var uploadContent = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "test.txt");
         
         await client.PostAsync("/api/v1/transactions/upload", uploadContent);
@@ -183,7 +184,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         var cnabContent = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
         var uploadContent = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "test.txt");
         
         await client.PostAsync("/api/v1/transactions/upload", uploadContent);
@@ -216,7 +217,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         // Act & Assert - Upload
         var uploadContent = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "workflow.txt");
         
         var uploadResponse = await client.PostAsync("/api/v1/transactions/upload", uploadContent);
@@ -284,7 +285,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
 
     private class PagedTransactionsResponse
     {
-        public List<Transaction> Items { get; set; } = new();
+        public List<Transaction> Items { get; set; } = [];
         public int TotalCount { get; set; }
         public int Page { get; set; }
         public int PageSize { get; set; }
@@ -298,6 +299,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
 
     private class ErrorResponse
     {
+        [JsonPropertyName("error")]
         public string Error { get; set; } = string.Empty;
     }
 

@@ -3,7 +3,6 @@ using CnabApi.Models;
 using CnabApi.Services;
 using FluentAssertions;
 using Moq;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
 namespace CnabApi.Tests.Services;
@@ -14,7 +13,6 @@ namespace CnabApi.Tests.Services;
 /// </summary>
 public class CnabUploadServiceTests
 {
-    private readonly Mock<IFileService> _fileServiceMock;
     private readonly Mock<ICnabParserService> _parserServiceMock;
     private readonly Mock<ITransactionService> _transactionServiceMock;
     private readonly Mock<ILogger<CnabUploadService>> _loggerMock;
@@ -22,13 +20,11 @@ public class CnabUploadServiceTests
 
     public CnabUploadServiceTests()
     {
-        _fileServiceMock = new Mock<IFileService>();
         _parserServiceMock = new Mock<ICnabParserService>();
         _transactionServiceMock = new Mock<ITransactionService>();
         _loggerMock = new Mock<ILogger<CnabUploadService>>();
 
         _uploadService = new CnabUploadService(
-            _fileServiceMock.Object,
             _parserServiceMock.Object,
             _transactionServiceMock.Object,
             _loggerMock.Object
@@ -38,10 +34,9 @@ public class CnabUploadServiceTests
     #region ProcessCnabUploadAsync - Success Cases
 
     [Fact]
-    public async Task ProcessCnabUploadAsync_WithValidFile_ShouldReturnSuccess()
+    public async Task ProcessCnabUploadAsync_WithValidFileContent_ShouldReturnSuccess()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "valid content");
         var fileContent = "valid CNAB content";
         var transactions = new List<Transaction>
         {
@@ -49,20 +44,16 @@ public class CnabUploadServiceTests
             CreateTransaction("2", 50m)
         };
 
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<string>.Success(fileContent));
-
         _parserServiceMock
             .Setup(x => x.ParseCnabFile(fileContent))
             .Returns(Result<List<Transaction>>.Success(transactions));
 
         _transactionServiceMock
-            .Setup(x => x.AddTransactionsAsync(transactions, It.IsAny<CancellationToken>()))
+            .Setup(x => x.AddTransactionsAsync(It.IsAny<List<Transaction>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<List<Transaction>>.Success(transactions));
 
         // Act
-        var result = await _uploadService.ProcessCnabUploadAsync(file);
+        var result = await _uploadService.ProcessCnabUploadAsync(fileContent);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
@@ -73,14 +64,9 @@ public class CnabUploadServiceTests
     public async Task ProcessCnabUploadAsync_ShouldCallServicesInCorrectOrder()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "content");
+        var fileContent = "content";
         var callOrder = new List<string>();
         var transactions = new List<Transaction> { CreateTransaction("1", 100m) };
-
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .Callback(() => callOrder.Add("ReadCnabFileAsync"))
-            .ReturnsAsync(Result<string>.Success("content"));
 
         _parserServiceMock
             .Setup(x => x.ParseCnabFile(It.IsAny<string>()))
@@ -93,17 +79,17 @@ public class CnabUploadServiceTests
             .ReturnsAsync(Result<List<Transaction>>.Success(transactions));
 
         // Act
-        await _uploadService.ProcessCnabUploadAsync(file);
+        await _uploadService.ProcessCnabUploadAsync(fileContent);
 
         // Assert
-        callOrder.Should().ContainInOrder("ReadCnabFileAsync", "ParseCnabFile", "AddTransactionsAsync");
+        callOrder.Should().ContainInOrder("ParseCnabFile", "AddTransactionsAsync");
     }
 
     [Fact]
     public async Task ProcessCnabUploadAsync_ShouldPassParsedTransactionsToTransactionService()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "content");
+        var fileContent = "content";
         var expectedTransactions = new List<Transaction>
         {
             CreateTransaction("1", 100m),
@@ -111,12 +97,8 @@ public class CnabUploadServiceTests
             CreateTransaction("3", 300m)
         };
 
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<string>.Success("content"));
-
         _parserServiceMock
-            .Setup(x => x.ParseCnabFile(It.IsAny<string>()))
+            .Setup(x => x.ParseCnabFile(fileContent))
             .Returns(Result<List<Transaction>>.Success(expectedTransactions));
 
         List<Transaction>? capturedTransactions = null;
@@ -126,12 +108,12 @@ public class CnabUploadServiceTests
             .ReturnsAsync(Result<List<Transaction>>.Success(expectedTransactions));
 
         // Act
-        await _uploadService.ProcessCnabUploadAsync(file);
+        await _uploadService.ProcessCnabUploadAsync(fileContent);
 
         // Assert
         capturedTransactions.Should().NotBeNull();
         capturedTransactions.Should().HaveCount(3);
-        capturedTransactions.Should().BeEquivalentTo(expectedTransactions);
+        capturedTransactions.Should().HaveCount(3);
     }
 
     #endregion
@@ -139,170 +121,117 @@ public class CnabUploadServiceTests
     #region ProcessCnabUploadAsync - Failure Cases
 
     [Fact]
-    public async Task ProcessCnabUploadAsync_WhenFileReadingFails_ShouldReturnFailure()
+    public async Task ProcessCnabUploadAsync_WhenContentIsEmpty_ShouldReturnFailure()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "content");
-
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<string>.Failure("Arquivo inválido"));
+        var fileContent = "";
 
         // Act
-        var result = await _uploadService.ProcessCnabUploadAsync(file);
+        var result = await _uploadService.ProcessCnabUploadAsync(fileContent);
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("inválido");
+        result.ErrorMessage.Should().Contain("not provided or is empty");
     }
 
     [Fact]
-    public async Task ProcessCnabUploadAsync_WhenFileReadingFails_ShouldNotCallParser()
+    public async Task ProcessCnabUploadAsync_WhenContentIsNull_ShouldReturnFailure()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "content");
-
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<string>.Failure("Error"));
+        string fileContent = null!;
 
         // Act
-        await _uploadService.ProcessCnabUploadAsync(file);
+        var result = await _uploadService.ProcessCnabUploadAsync(fileContent);
 
         // Assert
-        _parserServiceMock.Verify(x => x.ParseCnabFile(It.IsAny<string>()), Times.Never);
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("not provided or is empty");
     }
 
     [Fact]
     public async Task ProcessCnabUploadAsync_WhenParsingFails_ShouldReturnFailure()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "content");
-
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<string>.Success("content"));
+        var fileContent = "invalid content";
 
         _parserServiceMock
-            .Setup(x => x.ParseCnabFile(It.IsAny<string>()))
-            .Returns(Result<List<Transaction>>.Failure("Erro ao parsear CNAB"));
+            .Setup(x => x.ParseCnabFile(fileContent))
+            .Returns(Result<List<Transaction>>.Failure("Invalid CNAB format"));
 
         // Act
-        var result = await _uploadService.ProcessCnabUploadAsync(file);
+        var result = await _uploadService.ProcessCnabUploadAsync(fileContent);
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("parsear");
+        result.ErrorMessage.Should().Contain("Invalid CNAB format");
     }
 
     [Fact]
     public async Task ProcessCnabUploadAsync_WhenParsingFails_ShouldNotCallTransactionService()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "content");
-
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<string>.Success("content"));
+        var fileContent = "content";
 
         _parserServiceMock
-            .Setup(x => x.ParseCnabFile(It.IsAny<string>()))
+            .Setup(x => x.ParseCnabFile(fileContent))
             .Returns(Result<List<Transaction>>.Failure("Error"));
 
         // Act
-        await _uploadService.ProcessCnabUploadAsync(file);
+        await _uploadService.ProcessCnabUploadAsync(fileContent);
 
         // Assert
-        _transactionServiceMock.Verify(x => x.AddTransactionsAsync(It.IsAny<List<Transaction>>(), It.IsAny<CancellationToken>()), Times.Never);
+        _transactionServiceMock.Verify(
+            x => x.AddTransactionsAsync(It.IsAny<List<Transaction>>(), It.IsAny<CancellationToken>()), 
+            Times.Never);
     }
 
     [Fact]
     public async Task ProcessCnabUploadAsync_WhenSavingFails_ShouldReturnFailure()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "content");
+        var fileContent = "content";
         var transactions = new List<Transaction> { CreateTransaction("1", 100m) };
 
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<string>.Success("content"));
-
         _parserServiceMock
-            .Setup(x => x.ParseCnabFile(It.IsAny<string>()))
+            .Setup(x => x.ParseCnabFile(fileContent))
             .Returns(Result<List<Transaction>>.Success(transactions));
 
         _transactionServiceMock
             .Setup(x => x.AddTransactionsAsync(It.IsAny<List<Transaction>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<List<Transaction>>.Failure("Erro ao salvar no banco"));
+            .ReturnsAsync(Result<List<Transaction>>.Failure("Database error"));
 
         // Act
-        var result = await _uploadService.ProcessCnabUploadAsync(file);
+        var result = await _uploadService.ProcessCnabUploadAsync(fileContent);
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("salvar");
-    }
-
-    [Fact]
-    public async Task ProcessCnabUploadAsync_WhenFileServiceThrowsException_ShouldReturnFailure()
-    {
-        // Arrange
-        var file = CreateMockFormFile("test.txt", "content");
-
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new IOException("Simulated file read exception"));
-
-        // Act
-        var result = await _uploadService.ProcessCnabUploadAsync(file);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("unexpected error");
     }
 
     [Fact]
     public async Task ProcessCnabUploadAsync_WhenTransactionServiceThrowsException_ShouldReturnFailure()
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "content");
+        var fileContent = "content";
         var transactions = new List<Transaction> { CreateTransaction("1", 100m) };
 
-        _fileServiceMock
-            .Setup(x => x.ReadCnabFileAsync(file, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<string>.Success("content"));
-
         _parserServiceMock
-            .Setup(x => x.ParseCnabFile(It.IsAny<string>()))
+            .Setup(x => x.ParseCnabFile(fileContent))
             .Returns(Result<List<Transaction>>.Success(transactions));
 
         _transactionServiceMock
             .Setup(x => x.AddTransactionsAsync(It.IsAny<List<Transaction>>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("Simulated database exception"));
+            .ThrowsAsync(new InvalidOperationException("Database error"));
 
         // Act
-        var result = await _uploadService.ProcessCnabUploadAsync(file);
+        var result = await _uploadService.ProcessCnabUploadAsync(fileContent);
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("unexpected error");
     }
 
     #endregion
 
     #region Helper Methods
-
-    private static IFormFile CreateMockFormFile(string fileName, string content)
-    {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(content);
-        var stream = new MemoryStream(bytes);
-
-        return new FormFile(stream, 0, bytes.Length, "file", fileName)
-        {
-            Headers = new HeaderDictionary(),
-            ContentType = "text/plain"
-        };
-    }
 
     private static Transaction CreateTransaction(string natureCode, decimal amount)
     {

@@ -79,7 +79,7 @@ public class FileServiceTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("fornecido");
+        result.ErrorMessage.Should().Contain("provided");
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class FileServiceTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("fornecido");
+        result.ErrorMessage.Should().Contain("provided");
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public class FileServiceTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("vazio");
+        result.ErrorMessage.Should().Contain("empty");
     }
 
     [Fact]
@@ -180,7 +180,7 @@ public class FileServiceTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("excede o tamanho máximo");
+        result.ErrorMessage.Should().Contain("exceeds the maximum");
     }
 
     [Fact]

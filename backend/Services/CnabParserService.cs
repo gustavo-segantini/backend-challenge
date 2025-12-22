@@ -18,7 +18,7 @@ public class CnabParserService : ICnabParserService
         try
         {
             if (string.IsNullOrWhiteSpace(fileContent))
-                return Result<List<Transaction>>.Failure("Conteúdo do arquivo está vazio.");
+                return Result<List<Transaction>>.Failure("File content is empty.");
 
             var transactions = new List<Transaction>();
             var lines = fileContent.Split(["\r\n", "\r", "\n"], StringSplitOptions.None);
@@ -31,7 +31,7 @@ public class CnabParserService : ICnabParserService
                 if (line.Length < 80)
                 {
                     return Result<List<Transaction>>.Failure(
-                        $"Linha inválida: esperado mínimo 80 caracteres, obtido {line.Length}.");
+                        $"Invalid line: expected minimum 80 characters, got {line.Length}.");
                 }
 
                 var transaction = ParseTransaction(line);

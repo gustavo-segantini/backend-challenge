@@ -341,7 +341,6 @@ backend-challenge/
 ## 📚 Documentation
 
 - [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - Complete API reference with curl/Postman examples
-- [ROADMAP.md](ROADMAP.md) - Development plan (upcoming features and timeline)
 
 ## 🏗️ Architecture
 

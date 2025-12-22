@@ -52,8 +52,8 @@ try
     
     var app = builder.Build();
 
+    app.UseEnableRequestBodyBuffering();
     app.UseCorrelationIdMiddleware();
-    app.UseSerilogRequestLogging(); // Use Serilog for request logging (respects LogContext)
     app.UseExceptionHandlingMiddleware();
     app.UseResponseCompression();
     app.UseSwaggerConfiguration();

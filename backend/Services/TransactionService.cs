@@ -59,6 +59,10 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
             if (string.IsNullOrWhiteSpace(options.Cpf))
                 return Result<PagedResult<Transaction>>.Failure("CPF is required.");
 
+            // Validate CPF format: should contain only digits and be 11-14 characters
+            if (!System.Text.RegularExpressions.Regex.IsMatch(options.Cpf.Trim(), @"^\d{11,14}$"))
+                return Result<PagedResult<Transaction>>.Failure("Invalid CPF format. CPF must contain 11-14 digits.");
+
             if (options.Page <= 0 || options.PageSize <= 0)
                 return Result<PagedResult<Transaction>>.Failure("Invalid pagination parameters.");
 

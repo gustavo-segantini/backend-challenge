@@ -152,7 +152,7 @@ public class CnabParserServiceTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("vazio");
+        result.ErrorMessage.Should().Contain("empty");
     }
 
     [Fact]
@@ -192,7 +192,7 @@ public class CnabParserServiceTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Linha inválida");
+        result.ErrorMessage.Should().Contain("Invalid line");
     }
 
     [Fact]
@@ -222,7 +222,7 @@ INVALID_LINE_HERE
         // Assert
         // Parser returns failure on first invalid line encountered
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Linha inválida");
+        result.ErrorMessage.Should().Contain("Invalid line");
     }
 
     #endregion
@@ -268,7 +268,7 @@ INVALID_LINE_HERE
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("vazio");
+        result.ErrorMessage.Should().Contain("empty");
     }
 
     [Fact]

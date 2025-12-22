@@ -20,16 +20,16 @@ public class FileService : IFileService
         {
             // Validate file is provided
             if (file == null || file.Length == 0)
-                return Result<string>.Failure("Arquivo não foi fornecido ou está vazio.");
+                return Result<string>.Failure("File was not provided or is empty.");
 
             // Validate file size
             if (file.Length > MaxFileSizeBytes)
-                return Result<string>.Failure($"Arquivo excede o tamanho máximo permitido de {MaxFileSizeBytes / 1024} KB.");
+                return Result<string>.Failure($"File exceeds the maximum allowed size of {MaxFileSizeBytes / (1024 * 1024)} MB.");
 
             // Validate file extension
             var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (fileExtension != AllowedExtension)
-                return Result<string>.Failure($"Apenas arquivos com extensão '{AllowedExtension}' são permitidos.");
+                return Result<string>.Failure($"Only files with extension '{AllowedExtension}' are allowed.");
 
             // Read file content
             using var reader = new StreamReader(file.OpenReadStream());
@@ -37,7 +37,7 @@ public class FileService : IFileService
 
             // Validate content is not empty
             if (string.IsNullOrWhiteSpace(fileContent))
-                return Result<string>.Failure("O arquivo está vazio ou contém apenas espaços em branco.");
+                return Result<string>.Failure("The file is empty or contains only whitespace.");
 
             return Result<string>.Success(fileContent);
         }

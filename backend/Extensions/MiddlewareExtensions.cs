@@ -12,7 +12,16 @@ namespace CnabApi.Extensions;
 public static class MiddlewareExtensions
 {
     /// <summary>
-    /// Adds correlation ID middleware (must be first in the pipeline).
+    /// Adds request body buffering middleware (must be first in the pipeline).
+    /// </summary>
+    public static WebApplication UseEnableRequestBodyBuffering(this WebApplication app)
+    {
+        app.UseMiddleware<EnableRequestBodyBufferingMiddleware>();
+        return app;
+    }
+
+    /// <summary>
+    /// Adds correlation ID middleware (must be second in the pipeline).
     /// </summary>
     public static WebApplication UseCorrelationIdMiddleware(this WebApplication app)
     {

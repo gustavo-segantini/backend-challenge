@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace CnabApi.Models;
 
@@ -48,6 +49,14 @@ public class Transaction
     /// Unique identifier for the transaction record.
     /// </summary>
     public int Id { get; set; }
+
+    /// <summary>
+    /// Idempotency key to prevent duplicate transaction processing.
+    /// Combination of file hash + line number ensures uniqueness across uploads.
+    /// Used to detect and skip duplicate transactions in case of retries.
+    /// </summary>
+    [MaxLength(256)]
+    public string IdempotencyKey { get; set; } = string.Empty;
 
     /// <summary>
     /// Bank code (4 characters).

@@ -5,71 +5,71 @@
 [![Coverage](https://img.shields.io/badge/coverage-86.7%25-brightgreen)](https://github.com)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Uma API robusta, production-ready para processamento e análise de arquivos CNAB com autenticação JWT, OAuth GitHub, e recursos enterprise como logging estruturado, validação robusta e testes abrangentes.
+A robust, production-ready API for processing and analyzing CNAB files with JWT authentication, GitHub OAuth, and enterprise-grade features like structured logging, robust validation, and comprehensive tests.
 
-## 📋 Índice
+## 📋 Table of Contents
 
-- [Visão Geral](#visão-geral)
-- [Tecnologias](#tecnologias)
-- [Pré-requisitos](#pré-requisitos)
-- [Setup Rápido](#setup-rápido)
-- [Configuração Detalhada](#configuração-detalhada)
-- [Uso da API](#uso-da-api)
-- [Desenvolvimento](#desenvolvimento)
-- [Testes](#testes)
+- [Overview](#overview)
+- [Technologies](#technologies)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Detailed Configuration](#detailed-configuration)
+- [API Usage](#api-usage)
+- [Development](#development)
+- [Tests](#tests)
 - [Troubleshooting](#troubleshooting)
-- [Documentação](#documentação)
+- [Documentation](#documentation)
 
-## 🎯 Visão Geral
+## 🎯 Overview
 
-**CNAB Parser API** é uma solução completa para processar arquivos CNAB (Configuração Nacional Aplicativo Computadorial Bancário), fornecendo:
+**CNAB Parser API** is a complete solution for processing CNAB files (National Standardized Configuration for Banking Applications), providing:
 
-✅ **Upload e parser de arquivos CNAB** com validação rigorosa  
-✅ **API RESTful versioned** (`/api/v1/`) com autenticação JWT + OAuth GitHub  
-✅ **Paginação, filtros e ordenação** em consultas de transações  
-✅ **Logging estruturado** com correlation ID end-to-end (Serilog)  
-✅ **Validação robusta** com FluentValidation (CPF real, credenciais)  
-✅ **Testes abrangentes** (268 testes com 86.7% de cobertura)  
-✅ **Docker Compose** para desenvolvimento e produção  
-✅ **Application Insights** pronto para telemetria em produção  
-✅ **ProblemDetails RFC 7807** para respostas HTTP padronizadas  
-✅ **Swagger/OpenAPI** com documentação interativa  
+✅ **CNAB file upload and parsing** with rigorous validation  
+✅ **Versioned RESTful API** (`/api/v1/`) with JWT + GitHub OAuth authentication  
+✅ **Pagination, filtering, and sorting** on transaction queries  
+✅ **Structured logging** with end-to-end correlation ID (Serilog)  
+✅ **Robust validation** with FluentValidation (real CPF, credentials)  
+✅ **Comprehensive tests** (268 tests with 86.7% coverage)  
+✅ **Docker Compose** for development and production  
+✅ **Application Insights** ready for production telemetry  
+✅ **ProblemDetails RFC 7807** for standardized HTTP responses  
+✅ **Swagger/OpenAPI** with interactive documentation  
 
-## 🛠️ Tecnologias
+## 🛠️ Technologies
 
-| Camada | Tecnologia | Versão | Propósito |
+| Layer | Technology | Version | Purpose |
 |--------|-----------|--------|----------|
-| **Runtime** | .NET | 9.0/10.0 | Execução |
-| **Web Framework** | ASP.NET Core | Latest | APIs HTTP |
-| **Database** | PostgreSQL | 15 | Persistência |
-| **ORM** | Entity Framework Core | Latest | Acesso a dados |
-| **Logging** | Serilog | 4.2.0 | Logs estruturados |
-| **Validação** | FluentValidation | 11.11.0 | Validação de inputs |
+| **Runtime** | .NET | 9.0/10.0 | Execution |
+| **Web Framework** | ASP.NET Core | Latest | HTTP APIs |
+| **Database** | PostgreSQL | 15 | Persistence |
+| **ORM** | Entity Framework Core | Latest | Data Access |
+| **Logging** | Serilog | 4.2.0 | Structured Logs |
+| **Validation** | FluentValidation | 11.11.0 | Input Validation |
 | **Errors** | ProblemDetails Middleware | 6.4.1 | RFC 7807 |
 | **API Version** | Microsoft.AspNetCore.Mvc.Versioning | 5.1.0 | v1, v2... |
-| **Testing** | xUnit + Moq | Latest | Testes |
+| **Testing** | xUnit + Moq | Latest | Tests |
 | **Frontend** | React | 19 | UI |
-| **Containers** | Docker | Latest | Orquestração |
+| **Containers** | Docker | Latest | Orchestration |
 
-## Arquitetura
-- API REST: [backend/Program.cs](backend/Program.cs) com controllers em [backend/Controllers](backend/Controllers).
-- Camada de domínio/serviços: parser, upload, transações e arquivos em [backend/Services](backend/Services).
-- Persistência: EF Core + migrations em [backend/Data](backend/Data).
-- Middleware: tratamento global de erros (ExceptionHandlingMiddleware).
+## Architecture
+- REST API: [backend/Program.cs](backend/Program.cs) with controllers in [backend/Controllers](backend/Controllers).
+- Domain/services layer: parser, upload, transactions, and files in [backend/Services](backend/Services).
+- Persistence: EF Core + migrations in [backend/Data](backend/Data).
+- Middleware: global error handling (ExceptionHandlingMiddleware).
 
-## Pré-requisitos
+## Prerequisites
 
-**Mínimo (recomendado):**
+**Minimum (recommended):**
 - Docker Desktop ([Download](https://www.docker.com/products/docker-desktop))
 
-**Opcional (desenvolvimento local):**
+**Optional (local development):**
 - .NET 9 SDK
 - Node 20+
 - PostgreSQL 16
 
-## Como rodar com Docker (recomendado)
+## Running with Docker (recommended)
 
-### Opção 1 - Setup automático (recomendado)
+### Option 1 - Automated Setup (recommended)
 
 ```bash
 # Windows
@@ -79,37 +79,37 @@ setup.bat
 bash setup.sh
 ```
 
-O script automaticamente:
-1. ✅ Verifica se Docker está instalado e rodando
-2. ✅ Cria arquivo `.env` (caso não exista)
-3. ✅ Faz build dos containers
-4. ✅ Sobe todos os serviços
-5. ✅ Aguarda até ficarem healthy (30s)
+The script automatically:
+1. ✅ Checks if Docker is installed and running
+2. ✅ Creates `.env` file (if it doesn't exist)
+3. ✅ Builds containers
+4. ✅ Brings up all services
+5. ✅ Waits for them to be healthy (30s)
 
-### Opção 2 - Comando manual
+### Option 2 - Manual Command
 
 ```bash
 docker-compose up --build
 ```
 
-### Serviços Disponíveis
+### Available Services
 
-| Serviço | URL | Descrição |
+| Service | URL | Description |
 |---------|-----|-----------|
-| **Frontend** | http://localhost:3000 | Interface de upload de CNAB |
+| **Frontend** | http://localhost:3000 | CNAB upload interface |
 | **API** | http://localhost:5000 | Backend REST API |
-| **Swagger** | http://localhost:5000/swagger | Documentação interativa |
+| **Swagger** | http://localhost:5000/swagger | Interactive documentation |
 | **Database** | localhost:5432 | PostgreSQL (postgres/postgres) |
-| **Health Check** | http://localhost:5000/api/v1/health | Status da aplicação |
-| **Prometheus Metrics** | http://localhost:5000/metrics | Métricas para Prometheus/Grafana |
+| **Health Check** | http://localhost:5000/api/v1/health | Application status |
+| **Prometheus Metrics** | http://localhost:5000/metrics | Metrics for Prometheus/Grafana |
 
-### Monitoramento e Saúde da Aplicação
+### Application Health and Monitoring
 
 ```bash
-# Health check simples (retorna "Healthy")
+# Simple health check (returns "Healthy")
 curl http://localhost:5000/api/v1/health
 
-# Métricas Prometheus (para scraping)
+# Prometheus metrics (for scraping)
 curl http://localhost:5000/metrics
 
 # Readiness probe (k8s)
@@ -119,53 +119,53 @@ curl http://localhost:5000/api/v1/health/ready
 curl http://localhost:5000/api/v1/health/live
 ```
 
-### Comandos Úteis
+### Useful Commands
 
 ```bash
-# Ver status dos serviços
+# Check service status
 docker-compose ps
 
-# Ver logs em tempo real
-docker-compose logs -f api              # Logs da API
-docker-compose logs -f frontend         # Logs do Frontend
-docker-compose logs -f                  # Todos os logs
+# View logs in real-time
+docker-compose logs -f api              # API logs
+docker-compose logs -f frontend         # Frontend logs
+docker-compose logs -f                  # All logs
 
-# Parar serviços
+# Stop services
 docker-compose down
 
-# Reiniciar tudo
+# Restart everything
 docker-compose down && docker-compose up -d --build
 
-# Limpar volumes (recria banco)
+# Clean volumes (recreates database)
 docker-compose down -v
 ```
 
-## Como rodar só a API (sem Docker)
+## Running Only the API (without Docker)
 
 ### Backend
 
-Pré-requisitos: .NET 9 SDK + PostgreSQL 16
+Prerequisites: .NET 9 SDK + PostgreSQL 16
 
 ```bash
-# 1. Instalar dependências
+# 1. Install dependencies
 cd backend
 dotnet restore
 
-# 2. Configurar banco (opcional)
+# 2. Configure database (optional)
 $env:ConnectionStrings__PostgresConnection = "Host=localhost;Port=5432;Database=cnab_db;Username=postgres;Password=postgres"
 
-# 3. Aplicar migrations
+# 3. Apply migrations
 dotnet ef database update
 
-# 4. Rodar API
+# 4. Run API
 dotnet run
 ```
 
-API fica em: http://localhost:5000
+API runs at: http://localhost:5000
 
 ### Frontend
 
-Pré-requisitos: Node.js 20+
+Prerequisites: Node.js 20+
 
 ```bash
 cd frontend
@@ -173,37 +173,37 @@ npm install
 npm start
 ```
 
-Frontend fica em: http://localhost:3000
+Frontend runs at: http://localhost:3000
 
-## Testes
+## Tests
 
-### Executar Testes
+### Running Tests
 
 ```bash
-# Todos os testes
+# All tests
 dotnet test
 
-# Apenas unitários
+# Unit tests only
 dotnet test backend.Tests/CnabApi.Tests.csproj
 
-# Apenas integração
+# Integration tests only
 dotnet test backend.IntegrationTests/CnabApi.IntegrationTests.csproj
 ```
 
 ### Code Coverage
 
-O projeto tem **86.7% de cobertura de linha**, **77.27% de branch** e **90.5% de métodos** (268 testes).
+The project has **86.7% line coverage**, **77.27% branch coverage**, and **90.5% method coverage** (268 tests).
 
-#### Gerar Relatório de Coverage
+#### Generate Coverage Report
 
 ```bash
-# 1. Executar testes com cobertura (gera coverage.cobertura.xml)
+# 1. Run tests with coverage (generates coverage.cobertura.xml)
 dotnet test backend.Tests/CnabApi.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
 
-# 2. Gerar relatório HTML (requer reportgenerator)
+# 2. Generate HTML report (requires reportgenerator)
 reportgenerator -reports:backend.Tests/coverage.cobertura.xml -targetdir:backend.Tests/TestResults/CoverageReport -reporttypes:Html
 
-# 3. Abrir relatório no navegador
+# 3. Open report in browser
 # Windows
 start backend.Tests/TestResults/CoverageReport/index.html
 # macOS
@@ -212,45 +212,45 @@ open backend.Tests/TestResults/CoverageReport/index.html
 xdg-open backend.Tests/TestResults/CoverageReport/index.html
 ```
 
-#### Instalar ReportGenerator (primeira vez)
+#### Install ReportGenerator (first time)
 
 ```bash
 dotnet tool install -g dotnet-reportgenerator-globaltool
 ```
 
-#### O que está excluído da cobertura
+#### What's Excluded from Coverage
 
-Código de infraestrutura marcado com `[ExcludeFromCodeCoverage]`:
-- ✅ Migrations do EF Core
-- ✅ Program.cs (configuração de startup)
-- ✅ Extensions de configuração (ServiceCollection, Middleware, HealthChecks)
+Infrastructure code marked with `[ExcludeFromCodeCoverage]`:
+- ✅ EF Core migrations
+- ✅ Program.cs (startup configuration)
+- ✅ Configuration extensions (ServiceCollection, Middleware, HealthChecks)
 - ✅ DataSeeder
-- ✅ Middleware de exceções
+- ✅ Exception handling middleware
 
-Isso garante que a cobertura reflete apenas **código de negócio testável**.
+This ensures coverage reflects only **testable business code**.
 
-## Endpoints Principais
+## Main Endpoints
 
-- `POST /api/transactions/upload` — upload de arquivo CNAB
-- `GET /api/transactions/{cpf}` — lista transações do CPF
-- `GET /api/transactions/{cpf}/balance` — saldo do CPF
-- `DELETE /api/transactions` — limpa dados
+- `POST /api/transactions/upload` — upload CNAB file
+- `GET /api/transactions/{cpf}` — list transactions by CPF
+- `GET /api/transactions/{cpf}/balance` — CPF balance
+- `DELETE /api/transactions` — clear data
 
-Detalhes: [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
+Details: [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
 
-## Variáveis de Ambiente
+## Environment Variables
 
-Arquivo `.env` controla a configuração:
+The `.env` file controls configuration:
 
 ```bash
-POSTGRES_USER=postgres              # Usuário do banco
-POSTGRES_PASSWORD=postgres          # Senha do banco
-API_PORT=5000                       # Porta da API
-FRONTEND_PORT=3000                  # Porta do frontend
-ASPNETCORE_ENVIRONMENT=Production   # Modo (Production/Development)
+POSTGRES_USER=postgres              # Database user
+POSTGRES_PASSWORD=postgres          # Database password
+API_PORT=5000                       # API port
+FRONTEND_PORT=3000                  # Frontend port
+ASPNETCORE_ENVIRONMENT=Production   # Mode (Production/Development)
 ```
 
-Para customizar, edite `.env` e reinicie:
+To customize, edit `.env` and restart:
 
 ```bash
 docker-compose down
@@ -260,100 +260,98 @@ docker-compose up -d --build
 ## Troubleshooting
 
 ### "Docker is not installed"
-- Instale [Docker Desktop](https://www.docker.com/products/docker-desktop)
-- Reinicie o computador
-- Execute setup novamente
+- Install [Docker Desktop](https://www.docker.com/products/docker-desktop)
+- Restart your computer
+- Run setup again
 
 ### "Docker daemon is not running"
-- Abra Docker Desktop
-- Aguarde até que esteja pronto
-- Execute setup novamente
+- Open Docker Desktop
+- Wait until it's ready
+- Run setup again
 
 ### "Port 5000 is already in use"
 ```bash
-API_PORT=5001              # Edite .env
+API_PORT=5001              # Edit .env
 docker-compose down && docker-compose up -d --build
 ```
 
-### "Frontend não conecta com API"
+### "Frontend cannot connect to API"
 ```bash
-docker-compose logs api    # Verifique logs
+docker-compose logs api    # Check logs
 ```
-- Limpe cache do navegador (Ctrl+Shift+Delete)
-- Verifique se API está em http://localhost:5000/swagger
+- Clear browser cache (Ctrl+Shift+Delete)
+- Check if API is running at http://localhost:5000/swagger
 
-### "Banco de dados não sobe"
+### "Database won't start"
 ```bash
 docker-compose down -v     # Remove volumes
 docker-compose up -d --build
 ```
 
-### Ver logs detalhados
+### View detailed logs
 ```bash
-docker-compose logs postgres              # Log completo
-docker-compose logs postgres --tail=50    # Últimas 50 linhas
+docker-compose logs postgres              # Full log
+docker-compose logs postgres --tail=50    # Last 50 lines
 ```
 
-## Dicas Úteis
+## Helpful Tips
 
-- **Primeira execução**: pode levar 5-10 minutos para downloads e build
-- **Antes de git pull**: sempre execute `docker-compose down`
-- **Para troubleshooting**: use `docker-compose logs -f` para ver logs em tempo real
-- **Containers reiniçiam automaticamente** (`restart: unless-stopped`)
+- **First run**: may take 5-10 minutes for downloads and build
+- **Before git pull**: always run `docker-compose down`
+- **For troubleshooting**: use `docker-compose logs -f` to see logs in real-time
+- **Containers restart automatically** (`restart: unless-stopped`)
 
-## Estrutura do Projeto
+## Project Structure
 
 ```
 backend-challenge/
-├── backend/                    # API ASP.NET Core 9
-│   ├── Controllers/            # Endpoints REST
-│   ├── Services/               # Lógica de negócio
-│   ├── Models/                 # DTOs e entidades
+├── backend/                    # ASP.NET Core 9 API
+│   ├── Controllers/            # REST endpoints
+│   ├── Services/               # Business logic
+│   ├── Models/                 # DTOs and entities
 │   ├── Data/                   # EF Core + migrations
-│   └── Dockerfile              # Build produção
+│   └── Dockerfile              # Production build
 │
-├── backend.Tests/              # Testes unitários (xUnit)
-│   ├── Services/               # Testes de serviços
-│   ├── Controllers/            # Testes de controllers
-│   └── Utilities/              # Testes de utilitários
+├── backend.Tests/              # Unit tests (xUnit)
+│   ├── Services/               # Service tests
+│   ├── Controllers/            # Controller tests
+│   └── Utilities/              # Utility tests
 │
-├── backend.IntegrationTests/   # Testes de integração
+├── backend.IntegrationTests/   # Integration tests
 │
 ├── frontend/                   # React app
-│   ├── public/                 # HTML estático
-│   ├── src/                    # Componentes
-│   └── Dockerfile              # Build produção
+│   ├── public/                 # Static HTML
+│   ├── src/                    # Components
+│   └── Dockerfile              # Production build
 │
-├── docker-compose.yml          # Orquestração
-├── .env.example                # Template de variáveis
-├── setup.bat                   # Setup Windows
-├── setup.sh                    # Setup Unix
+├── docker-compose.yml          # Orchestration
+├── .env.example                # Variables template
+├── setup.bat                   # Windows setup
+├── setup.sh                    # Unix setup
 │
-├── README.md                   # Este arquivo
-├── GETTING_STARTED.md          # Guia detalhado
-├── API_DOCUMENTATION.md        # Referência de endpoints
-├── ROADMAP.md                  # Plano de desenvolvimento
-└── SETUP_VERIFICATION.md       # Checklist de verificação
+├── README.md                   # This file
+├── API_DOCUMENTATION.md        # Endpoint reference
+├── ROADMAP.md                  # Development plan
+└── SETUP_VERIFICATION.md       # Verification checklist
 ```
 
-**Total de testes**: 268 (xUnit + Moq)  
-**Cobertura**: 86.7% linha, 77.27% branch, 90.5% métodos
+**Total tests**: 268 (xUnit + Moq)  
+**Coverage**: 86.7% line, 77.27% branch, 90.5% method
 
-## 📚 Documentação
+## 📚 Documentation
 
-- [GETTING_STARTED.md](GETTING_STARTED.md) - Guia detalhado com mais exemplos e troubleshooting avançado
-- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - Referência completa de endpoints com exemplos curl/Postman
-- [ROADMAP.md](ROADMAP.md) - Plano de desenvolvimento (próximas features e timeline)
+- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - Complete API reference with curl/Postman examples
+- [ROADMAP.md](ROADMAP.md) - Development plan (upcoming features and timeline)
 
-## 🏗️ Arquitetura
+## 🏗️ Architecture
 
 - **Backend**: ASP.NET Core 9 + EF Core 9 + PostgreSQL 16
-- **Frontend**: React 18 + Axios
-- **Database**: PostgreSQL com migrations automáticas
-- **Cache**: Redis para performance
-- **Testes**: xUnit + Moq + WebApplicationFactory
-- **Deploy**: Docker Compose com health checks
+- **Frontend**: React 19 + Axios
+- **Database**: PostgreSQL with automatic migrations
+- **Cache**: Redis for performance
+- **Testing**: xUnit + Moq + WebApplicationFactory
+- **Deploy**: Docker Compose with health checks
 
-## Licença
+## License
 
-Uso interno para o desafio técnico.
+Internal use for the technical challenge.

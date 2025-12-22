@@ -26,7 +26,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         content.Add(fileContent, "file", "test.txt");
 
         // Act
@@ -47,7 +47,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         var client = await CreateAuthorizedClientAsync();
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Array.Empty<byte>());
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         content.Add(fileContent, "file", "empty.txt");
 
         // Act
@@ -69,7 +69,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         content.Add(fileContent, "file", "invalid.txt");
 
         // Act
@@ -94,7 +94,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         
         var uploadContent = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "test.txt");
         
         await client.PostAsync("/api/v1/transactions/upload", uploadContent);
@@ -143,7 +143,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         
         var uploadContent = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "test.txt");
         
         await client.PostAsync("/api/v1/transactions/upload", uploadContent);
@@ -184,7 +184,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         var cnabContent = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
         var uploadContent = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "test.txt");
         
         await client.PostAsync("/api/v1/transactions/upload", uploadContent);
@@ -217,7 +217,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         // Act & Assert - Upload
         var uploadContent = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(Encoding.UTF8.GetBytes(cnabContent));
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         uploadContent.Add(fileContent, "file", "workflow.txt");
         
         var uploadResponse = await client.PostAsync("/api/v1/transactions/upload", uploadContent);

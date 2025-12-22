@@ -1,8 +1,5 @@
 using CnabApi.IntegrationTests.Infrastructure;
 using CnabApi.Models;
-using System.Net;
-using Xunit;
-using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 
 namespace CnabApi.IntegrationTests.Controllers;

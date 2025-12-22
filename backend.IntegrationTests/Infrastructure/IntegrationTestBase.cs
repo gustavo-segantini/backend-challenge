@@ -1,6 +1,5 @@
 using CnabApi.Data;
 using Microsoft.EntityFrameworkCore;
-using Xunit;
 
 namespace CnabApi.IntegrationTests.Infrastructure;
 

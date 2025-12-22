@@ -1,10 +1,8 @@
 using CnabApi.IntegrationTests.Infrastructure;
 using CnabApi.Models;
 using CnabApi.Services;
-using CnabApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
-using Xunit;
 using Moq;
 
 namespace CnabApi.IntegrationTests.Services;

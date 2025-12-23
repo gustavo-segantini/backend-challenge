@@ -1,5 +1,6 @@
 using Minio;
 using Minio.DataModel.Args;
+using Minio.Exceptions;
 
 namespace CnabApi.Services.ObjectStorage;
 
@@ -66,6 +67,12 @@ public class MinioInitializationService : IHostedService
         {
             // MinIO might not be ready yet (container starting up)
             _logger.LogWarning(ex, "Could not connect to MinIO at {Endpoint}. MinIO may still be starting up. The application will continue in degraded mode.", _config.Endpoint);
+        }
+        catch (AccessDeniedException ex)
+        {
+            // User doesn't have permission to access the bucket or create it
+            // This is non-fatal - the application continues in degraded mode
+            _logger.LogWarning(ex, "Access denied to MinIO bucket {Bucket}. Check user credentials and permissions. The application will continue in degraded mode.", _config.BucketName);
         }
         catch (Exception ex)
         {

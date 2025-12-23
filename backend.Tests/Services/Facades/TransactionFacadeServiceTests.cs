@@ -2,6 +2,7 @@ using CnabApi.Common;
 using CnabApi.Models;
 using CnabApi.Services;
 using CnabApi.Services.Facades;
+using CnabApi.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,7 @@ public class TransactionFacadeServiceTests
     private readonly Mock<ICnabUploadService> _uploadServiceMock;
     private readonly Mock<ITransactionService> _transactionServiceMock;
     private readonly Mock<IFileUploadService> _fileUploadServiceMock;
+    private readonly Mock<IFileUploadTrackingService> _fileUploadTrackingServiceMock;
     private readonly Mock<IObjectStorageService> _objectStorageServiceMock;
     private readonly Mock<ILogger<TransactionFacadeService>> _loggerMock;
     private readonly TransactionFacadeService _service;
@@ -27,6 +29,7 @@ public class TransactionFacadeServiceTests
         _uploadServiceMock = new Mock<ICnabUploadService>();
         _transactionServiceMock = new Mock<ITransactionService>();
         _fileUploadServiceMock = new Mock<IFileUploadService>();
+        _fileUploadTrackingServiceMock = new Mock<IFileUploadTrackingService>();
         _objectStorageServiceMock = new Mock<IObjectStorageService>();
         _loggerMock = new Mock<ILogger<TransactionFacadeService>>();
 
@@ -34,6 +37,7 @@ public class TransactionFacadeServiceTests
             _uploadServiceMock.Object,
             _transactionServiceMock.Object,
             _fileUploadServiceMock.Object,
+            _fileUploadTrackingServiceMock.Object,
             _objectStorageServiceMock.Object,
             _loggerMock.Object
         );

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.WebUtilities;
 using CnabApi.Common;
 using CnabApi.Models;
+using CnabApi.Services.Interfaces;
 
 namespace CnabApi.Services.Facades;
 
@@ -14,6 +15,7 @@ public class TransactionFacadeService(
     ICnabUploadService uploadService,
     ITransactionService transactionService,
     IFileUploadService fileUploadService,
+    IFileUploadTrackingService fileUploadTrackingService,
     IObjectStorageService objectStorageService,
     ILogger<TransactionFacadeService> logger) : ITransactionFacadeService
 {
@@ -44,12 +46,32 @@ public class TransactionFacadeService(
                 return Result<UploadResult>.Failure(fileResult.ErrorMessage ?? "File upload validation failed", uploadResult);
             }
 
+            // Calculate file hash for duplicate detection
+            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(fileResult.Data!));
+            var fileHash = await fileUploadTrackingService.CalculateFileHashAsync(stream);
+            var fileSize = stream.Length;
+
+            // Check if file has already been uploaded
+            var duplicateCheckResult = await CheckForDuplicateUploadAsync(fileHash, cancellationToken);
+            if (duplicateCheckResult != null)
+            {
+                return duplicateCheckResult;
+            }
+
             // Process the uploaded file content
             var result = await uploadService.ProcessCnabUploadAsync(fileResult.Data!, cancellationToken);
 
             if (!result.IsSuccess)
             {
                 logger.LogWarning("CNAB file upload failed. Error: {Error}", result.ErrorMessage);
+                
+                // Record failed upload
+                await fileUploadTrackingService.RecordFailedUploadAsync(
+                    "uploaded-file",
+                    fileHash,
+                    fileSize,
+                    result.ErrorMessage ?? "Unknown error",
+                    cancellationToken);
                 
                 // Check if it's a content validation error (422) or general error (400)
                 var statusCode = result.ErrorMessage?.Contains("invalid", StringComparison.OrdinalIgnoreCase) ?? false
@@ -61,7 +83,16 @@ public class TransactionFacadeService(
             }
 
             // Store the original file in MinIO for audit trail
-            await StoreFileInObjectStorageAsync(fileResult.Data!, cancellationToken);
+            var storagePath = await StoreFileInObjectStorageAsync(fileResult.Data!, cancellationToken);
+
+            // Record successful upload
+            await fileUploadTrackingService.RecordSuccessfulUploadAsync(
+                "uploaded-file",
+                fileHash,
+                fileSize,
+                result.Data,
+                storagePath,
+                cancellationToken);
 
             logger.LogInformation("CNAB file upload completed successfully. Transactions imported: {Count}", result.Data);
 
@@ -268,12 +299,38 @@ public class TransactionFacadeService(
     }
 
     /// <summary>
+    /// Checks if the uploaded file is a duplicate based on SHA256 hash.
+    /// </summary>
+    /// <param name="fileHash">SHA256 hash of the file content</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Failure result if duplicate found, null if file is unique</returns>
+    private async Task<Result<UploadResult>?> CheckForDuplicateUploadAsync(string fileHash, CancellationToken cancellationToken)
+    {
+        var (isUnique, existingUpload) = await fileUploadTrackingService.IsFileUniqueAsync(fileHash, cancellationToken);
+        if (!isUnique && existingUpload != null)
+        {
+            logger.LogWarning(
+                "Duplicate file upload rejected. File: {FileName}, Previous upload: {PreviousUpload} ({ProcessedLines} lines)",
+                "uploaded-file",
+                existingUpload.FileName,
+                existingUpload.ProcessedLineCount);
+
+            return Result<UploadResult>.Failure(
+                "Este arquivo já foi processado anteriormente. Para evitar duplicatas, o upload foi rejeitado.",
+                CreateDuplicateUploadResult(existingUpload));
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Stores the CNAB file content in object storage for audit trail.
     /// Failures are logged but do not affect the upload operation.
     /// </summary>
     /// <param name="fileContent">The file content to store</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    private async Task StoreFileInObjectStorageAsync(string fileContent, CancellationToken cancellationToken)
+    /// <returns>Storage path or null if storage failed</returns>
+    private async Task<string?> StoreFileInObjectStorageAsync(string fileContent, CancellationToken cancellationToken)
     {
         try
         {
@@ -286,12 +343,28 @@ public class TransactionFacadeService(
                 cancellationToken);
 
             logger.LogInformation("CNAB file stored in object storage: {FileUrl}", fileUrl);
+            return fileName;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to store CNAB file in object storage. Continuing with upload.");
             // Don't fail the upload if storage fails - the transaction data is already saved
+            return null;
         }
+    }
+
+    /// <summary>
+    /// Creates an upload result for duplicate file uploads.
+    /// </summary>
+    /// <param name="existingUpload">The previously uploaded file record</param>
+    /// <returns>Upload result with duplicate status and 409 conflict code</returns>
+    private static UploadResult CreateDuplicateUploadResult(FileUpload existingUpload)
+    {
+        return new UploadResult
+        {
+            TransactionCount = 0,
+            StatusCode = UploadStatusCode.Conflict // File already processed
+        };
     }
 
     /// <summary>

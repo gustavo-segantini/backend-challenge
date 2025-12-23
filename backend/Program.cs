@@ -34,6 +34,7 @@ try
         .AddCachingConfiguration(builder)
         .AddCompressionConfiguration()
         .AddApplicationServices()
+        .AddMinioConfiguration(builder.Configuration)
         .AddHealthChecksConfiguration(builder);
 
     // Get JWT options for authentication configuration

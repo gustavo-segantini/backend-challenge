@@ -7,11 +7,14 @@ namespace CnabApi.Services.Facades;
 /// <summary>
 /// Facade service that orchestrates transaction operations and business logic.
 /// This keeps controllers thin by handling all validation, orchestration, and error mapping.
+/// 
+/// Integrates with object storage for persisting uploaded CNAB files.
 /// </summary>
 public class TransactionFacadeService(
     ICnabUploadService uploadService,
     ITransactionService transactionService,
     IFileUploadService fileUploadService,
+    IObjectStorageService objectStorageService,
     ILogger<TransactionFacadeService> logger) : ITransactionFacadeService
 {
     public async Task<Result<UploadResult>> UploadCnabFileAsync(HttpRequest request, CancellationToken cancellationToken)
@@ -36,13 +39,8 @@ public class TransactionFacadeService(
             {
                 logger.LogWarning("File upload validation failed. Error: {Error}", fileResult.ErrorMessage);
                 
-                // Map error type to appropriate status code
                 var statusCode = DetermineUploadStatusCode(fileResult.ErrorMessage);
-                var uploadResult = new UploadResult
-                {
-                    TransactionCount = 0,
-                    StatusCode = statusCode
-                };
+                var uploadResult = CreateFailureUploadResult(statusCode);
                 return Result<UploadResult>.Failure(fileResult.ErrorMessage ?? "File upload validation failed", uploadResult);
             }
 
@@ -58,13 +56,12 @@ public class TransactionFacadeService(
                     ? UploadStatusCode.UnprocessableEntity
                     : UploadStatusCode.BadRequest;
                 
-                var uploadResult = new UploadResult
-                {
-                    TransactionCount = 0,
-                    StatusCode = statusCode
-                };
+                var uploadResult = CreateFailureUploadResult(statusCode);
                 return Result<UploadResult>.Failure(result.ErrorMessage ?? "Unknown error during upload", uploadResult);
             }
+
+            // Store the original file in MinIO for audit trail
+            await StoreFileInObjectStorageAsync(fileResult.Data!, cancellationToken);
 
             logger.LogInformation("CNAB file upload completed successfully. Transactions imported: {Count}", result.Data);
 
@@ -97,9 +94,7 @@ public class TransactionFacadeService(
 
         try
         {
-            var natureCodes = string.IsNullOrWhiteSpace(types)
-                ? []
-                : types.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            var natureCodes = ParseCommaSeparatedList(types);
 
             var queryOptions = new TransactionQueryOptions
             {
@@ -270,5 +265,59 @@ public class TransactionFacadeService(
             return UploadStatusCode.UnprocessableEntity;
 
         return UploadStatusCode.BadRequest;
+    }
+
+    /// <summary>
+    /// Stores the CNAB file content in object storage for audit trail.
+    /// Failures are logged but do not affect the upload operation.
+    /// </summary>
+    /// <param name="fileContent">The file content to store</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    private async Task StoreFileInObjectStorageAsync(string fileContent, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var fileName = $"cnab-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt";
+            var fileBytes = System.Text.Encoding.UTF8.GetBytes(fileContent);
+            var fileUrl = await objectStorageService.UploadFileAsync(
+                fileName,
+                fileBytes,
+                "text/plain",
+                cancellationToken);
+
+            logger.LogInformation("CNAB file stored in object storage: {FileUrl}", fileUrl);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to store CNAB file in object storage. Continuing with upload.");
+            // Don't fail the upload if storage fails - the transaction data is already saved
+        }
+    }
+
+    /// <summary>
+    /// Creates an UploadResult representing a failure with zero transactions.
+    /// </summary>
+    /// <param name="statusCode">The status code indicating the type of failure</param>
+    /// <returns>UploadResult with zero transactions and the specified status code</returns>
+    private static UploadResult CreateFailureUploadResult(UploadStatusCode statusCode)
+    {
+        return new UploadResult
+        {
+            TransactionCount = 0,
+            StatusCode = statusCode
+        };
+    }
+
+    /// <summary>
+    /// Parses a comma-separated string into a list of trimmed values.
+    /// Returns empty list if input is null or whitespace.
+    /// </summary>
+    /// <param name="commaSeparatedValues">Comma-separated string to parse</param>
+    /// <returns>List of trimmed non-empty values</returns>
+    private static List<string> ParseCommaSeparatedList(string? commaSeparatedValues)
+    {
+        return string.IsNullOrWhiteSpace(commaSeparatedValues)
+            ? []
+            : commaSeparatedValues.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
     }
 }

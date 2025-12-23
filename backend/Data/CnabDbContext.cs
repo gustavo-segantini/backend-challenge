@@ -31,6 +31,11 @@ public class CnabDbContext(DbContextOptions<CnabDbContext> options) : DbContext(
     /// </summary>
     public DbSet<FileUpload> FileUploads { get; set; }
 
+    /// <summary>
+    /// DbSet for file upload line hashes (for tracking duplicate lines).
+    /// </summary>
+    public DbSet<FileUploadLineHash> FileUploadLineHashes { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -142,5 +147,29 @@ public class CnabDbContext(DbContextOptions<CnabDbContext> options) : DbContext(
         modelBuilder.Entity<FileUpload>()
             .Property(fu => fu.Status)
             .HasConversion<int>();
+
+        // FileUploadLineHashes configuration
+        modelBuilder.Entity<FileUploadLineHash>()
+            .HasKey(lh => lh.Id);
+
+        modelBuilder.Entity<FileUploadLineHash>()
+            .HasIndex(lh => lh.LineHash)
+            .IsUnique();
+
+        modelBuilder.Entity<FileUploadLineHash>()
+            .Property(lh => lh.LineHash)
+            .IsRequired()
+            .HasMaxLength(64); // SHA256 in hex
+
+        modelBuilder.Entity<FileUploadLineHash>()
+            .Property(lh => lh.LineContent)
+            .IsRequired();
+
+        // Configure relationship between FileUpload and FileUploadLineHash
+        modelBuilder.Entity<FileUploadLineHash>()
+            .HasOne(lh => lh.FileUpload)
+            .WithMany(fu => fu.LineHashes)
+            .HasForeignKey(lh => lh.FileUploadId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

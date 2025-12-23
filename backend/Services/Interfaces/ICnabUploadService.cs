@@ -12,9 +12,11 @@ public interface ICnabUploadService
     /// Processes CNAB file content from a string using streaming multipart reader.
     /// Accepts the already-read file content as a string for memory-efficient processing.
     /// Supports files up to 1GB without loading entire content into memory at once.
+    /// Includes line-level duplicate detection when fileUploadId is provided.
     /// </summary>
     /// <param name="fileContent">The file content as a string.</param>
+    /// <param name="fileUploadId">The FileUpload ID for tracking line hashes (optional).</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
-    /// <returns>Result containing the count of imported transactions or error message.</returns>
-    Task<Result<int>> ProcessCnabUploadAsync(string fileContent, CancellationToken cancellationToken = default);
+    /// <returns>Result containing the count of imported transactions (excluding duplicates) or error message.</returns>
+    Task<Result<int>> ProcessCnabUploadAsync(string fileContent, Guid fileUploadId = default, CancellationToken cancellationToken = default);
 }

@@ -1,6 +1,7 @@
 using CnabApi.Common;
 using CnabApi.Models;
 using CnabApi.Services;
+using CnabApi.Services.Interfaces;
 using FluentAssertions;
 using Moq;
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,7 @@ public class CnabUploadServiceTests
 {
     private readonly Mock<ICnabParserService> _parserServiceMock;
     private readonly Mock<ITransactionService> _transactionServiceMock;
+    private readonly Mock<IFileUploadTrackingService> _fileUploadTrackingServiceMock;
     private readonly Mock<ILogger<CnabUploadService>> _loggerMock;
     private readonly CnabUploadService _uploadService;
 
@@ -22,11 +24,13 @@ public class CnabUploadServiceTests
     {
         _parserServiceMock = new Mock<ICnabParserService>();
         _transactionServiceMock = new Mock<ITransactionService>();
+        _fileUploadTrackingServiceMock = new Mock<IFileUploadTrackingService>();
         _loggerMock = new Mock<ILogger<CnabUploadService>>();
 
         _uploadService = new CnabUploadService(
             _parserServiceMock.Object,
             _transactionServiceMock.Object,
+            _fileUploadTrackingServiceMock.Object,
             _loggerMock.Object
         );
     }

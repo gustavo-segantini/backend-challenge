@@ -52,13 +52,13 @@ namespace CnabApi.Data.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_Stores_CpfCnpj_Card",
                 table: "Stores",
-                columns: new[] { "CpfCnpj", "Card" },
+                columns: ["CpfCnpj", "Card"],
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Transactions_TransactionDate_CpfCnpj",
                 table: "Transactions",
-                columns: new[] { "TransactionDate", "CpfCnpj" });
+                columns: ["TransactionDate", "CpfCnpj"]);
         }
 
         /// <inheritdoc />

@@ -118,6 +118,74 @@ public class FileUploadTrackingService(CnabDbContext db, ILogger<FileUploadTrack
             stream.Seek(0, SeekOrigin.Begin);
 
         // Convert hash bytes to hexadecimal string
-        return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+        return Convert.ToHexStringLower(hashBytes);
+    }
+
+    public async Task<bool> IsLineUniqueAsync(string lineHash, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(lineHash))
+            return true;
+
+        var existingLineHash = await _db.FileUploadLineHashes
+            .FirstOrDefaultAsync(lh => lh.LineHash == lineHash, cancellationToken);
+
+        if (existingLineHash != null)
+        {
+            _logger.LogWarning(
+                "Duplicate line detected. Hash: {LineHash}, Previous upload: {FileUploadId}",
+                lineHash,
+                existingLineHash.FileUploadId);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    public async Task RecordLineHashAsync(Guid fileUploadId, string lineHash, string lineContent, CancellationToken cancellationToken = default)
+    {
+        var lineHashRecord = new FileUploadLineHash
+        {
+            Id = Guid.NewGuid(),
+            FileUploadId = fileUploadId,
+            LineHash = lineHash,
+            LineContent = lineContent,
+            ProcessedAt = DateTime.UtcNow
+        };
+
+        _db.FileUploadLineHashes.Add(lineHashRecord);
+        
+        _logger.LogDebug(
+            "Line hash added to change tracker. FileUploadId: {FileUploadId}, LineHash: {LineHash}",
+            fileUploadId,
+            lineHash);
+    }
+
+    /// <summary>
+    /// Commits all pending line hash records to the database in a single operation.
+    /// Should be called after all line hashes have been added via RecordLineHashAsync.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the asynchronous save operation</returns>
+    public async Task CommitLineHashesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var changeCount = _db.ChangeTracker.Entries().Count(e => e.State == EntityState.Added);
+            
+            if (changeCount > 0)
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+                
+                _logger.LogInformation(
+                    "Committed {ChangeCount} line hash records to database",
+                    changeCount);
+            }
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Failed to commit line hash records. Database error: {Error}", ex.InnerException?.Message);
+            throw;
+        }
     }
 }

@@ -50,6 +50,11 @@ public class FileUpload
     /// Optional path or reference to the file in MinIO storage.
     /// </summary>
     public string? StoragePath { get; set; }
+
+    /// <summary>
+    /// Collection of line hashes from this file for tracking individual line duplicates.
+    /// </summary>
+    public ICollection<FileUploadLineHash> LineHashes { get; set; } = new List<FileUploadLineHash>();
 }
 
 /// <summary>

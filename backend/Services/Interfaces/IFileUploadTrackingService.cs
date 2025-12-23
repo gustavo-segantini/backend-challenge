@@ -55,4 +55,31 @@ public interface IFileUploadTrackingService
     /// <param name="stream">The stream to hash.</param>
     /// <returns>SHA256 hash as a hexadecimal string.</returns>
     Task<string> CalculateFileHashAsync(Stream stream);
+
+    /// <summary>
+    /// Checks if a line with the given hash has been previously processed.
+    /// </summary>
+    /// <param name="lineHash">SHA256 hash of the line content.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if the line is new (not previously processed), false if duplicate.</returns>
+    Task<bool> IsLineUniqueAsync(string lineHash, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records a processed line hash to track duplicate lines across uploads.
+    /// Adds the line hash to the change tracker but does not save immediately.
+    /// Use CommitLineHashesAsync to save all pending line hashes in a single database operation.
+    /// </summary>
+    /// <param name="fileUploadId">The parent FileUpload ID.</param>
+    /// <param name="lineHash">SHA256 hash of the line content.</param>
+    /// <param name="lineContent">The original line content.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task RecordLineHashAsync(Guid fileUploadId, string lineHash, string lineContent, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Commits all pending line hash records to the database in a single operation.
+    /// Should be called after all line hashes have been added via RecordLineHashAsync.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Task representing the asynchronous save operation</returns>
+    Task CommitLineHashesAsync(CancellationToken cancellationToken = default);
 }

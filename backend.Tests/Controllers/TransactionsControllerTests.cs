@@ -298,20 +298,7 @@ public class TransactionsControllerTests
     }
 
     #endregion
-
     #region Helper Methods
-
-    private static IFormFile CreateMockFormFile(string fileName, string content)
-    {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(content);
-        var stream = new MemoryStream(bytes);
-
-        return new FormFile(stream, 0, bytes.Length, "file", fileName)
-        {
-            Headers = new HeaderDictionary(),
-            ContentType = "text/plain"
-        };
-    }
 
     private static Transaction CreateTransaction(string natureCode, decimal amount, string cpf)
     {

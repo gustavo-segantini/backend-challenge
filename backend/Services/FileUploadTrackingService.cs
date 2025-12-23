@@ -54,7 +54,7 @@ public class FileUploadTrackingService(CnabDbContext db, ILogger<FileUploadTrack
             ProcessedLineCount = processedLineCount,
             Status = FileUploadStatus.Success,
             StoragePath = storagePath,
-            UploadedAt = DateTime.UtcNow
+            UploadedAt = DateTime.Now
         };
 
         _db.FileUploads.Add(fileUpload);
@@ -86,7 +86,7 @@ public class FileUploadTrackingService(CnabDbContext db, ILogger<FileUploadTrack
             ProcessedLineCount = 0,
             Status = FileUploadStatus.Failed,
             ErrorMessage = errorMessage,
-            UploadedAt = DateTime.UtcNow
+            UploadedAt = DateTime.Now
         };
 
         _db.FileUploads.Add(fileUpload);
@@ -150,7 +150,7 @@ public class FileUploadTrackingService(CnabDbContext db, ILogger<FileUploadTrack
             FileUploadId = fileUploadId,
             LineHash = lineHash,
             LineContent = lineContent,
-            ProcessedAt = DateTime.UtcNow
+            ProcessedAt = DateTime.Now
         };
 
         _db.FileUploadLineHashes.Add(lineHashRecord);

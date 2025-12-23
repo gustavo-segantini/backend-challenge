@@ -7,11 +7,103 @@
 
 ## Índice
 
-1. [Autenticação](#autenticação)
-2. [Transações](#transações)
-3. [Códigos de Status](#códigos-de-status)
-4. [Modelos de Dados](#modelos-de-dados)
-5. [Exemplos por Caso de Uso](#exemplos-por-caso-de-uso)
+1. [MinIO Object Storage](#minio-object-storage)
+2. [Autenticação](#autenticação)
+3. [Transações](#transações)
+4. [Códigos de Status](#códigos-de-status)
+5. [Modelos de Dados](#modelos-de-dados)
+6. [Exemplos por Caso de Uso](#exemplos-por-caso-de-uso)
+
+---
+
+## MinIO Object Storage
+
+### Overview
+
+The application uses **MinIO** as the object storage backend for managing uploaded CNAB files and other file artifacts. MinIO is automatically initialized on application startup using a hosted service pattern that ensures graceful degradation if the storage service is temporarily unavailable.
+
+### Configuration
+
+**Environment Variables** (set in `.env`):
+```bash
+MINIO_ROOT_USER=cnabuser            # MinIO access credentials
+MINIO_ROOT_PASSWORD=cnabpass123     # Secure password (change in production!)
+```
+
+**Default Values** (in `docker-compose.yml`):
+```yaml
+environment:
+  MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+```
+
+### Accessing MinIO Console
+
+The MinIO console provides a web-based interface for managing buckets and files:
+
+**URL**: `http://localhost:9001`  
+**Credentials**:
+- Username: `cnabuser` (from `.env`)
+- Password: `cnabpass123` (from `.env`)
+
+### API Access
+
+MinIO API is available at `http://localhost:9000` (internal Docker) or `http://localhost:9000` (local machine).
+
+### Implementation Details
+
+**Service**: `IObjectStorageService` (implemented by `MinioStorageService`)
+
+**Key Operations**:
+- `UploadFileAsync(bucketName, fileName, stream)` - Upload file to MinIO
+- `DownloadFileAsync(bucketName, fileName)` - Download file from MinIO
+- `DeleteFileAsync(bucketName, fileName)` - Delete file from MinIO
+
+**Usage Example**:
+```csharp
+// In TransactionFacadeService
+await _objectStorageService.UploadFileAsync(
+    bucketName: "cnab-uploads",
+    fileName: $"cnab-{DateTime.UtcNow:yyyyMMdd-HHmmss}.txt",
+    stream: fileStream
+);
+```
+
+### Graceful Degradation
+
+If MinIO is unavailable:
+- ✅ Application starts normally
+- ✅ Upload endpoints return success (file processing still works)
+- ✅ File storage is skipped with logged warning
+- ✅ No impact on core transaction processing
+
+**Initialization Service**: `MinioInitializationService` (IHostedService)
+- Runs asynchronously during application startup
+- Creates default bucket if it doesn't exist
+- Non-blocking: doesn't prevent API from starting
+
+### Troubleshooting MinIO
+
+**Check MinIO Health**:
+```bash
+# From inside Docker
+docker-compose exec minio curl -f http://localhost:9000/minio/health/live
+
+# View MinIO logs
+docker-compose logs minio
+```
+
+**Reset MinIO Data**:
+```bash
+# Remove MinIO volume and restart
+docker-compose down -v
+docker-compose up -d --build minio
+```
+
+**Connection Issues**:
+- Verify `.env` credentials match `docker-compose.yml`
+- Ensure MinIO service is healthy: `docker-compose ps`
+- Check network connectivity: `docker network inspect cnab_network`
 
 ---
 

@@ -42,6 +42,8 @@ A robust, production-ready API for processing and analyzing CNAB files with JWT 
 | **Runtime** | .NET | 9.0/10.0 | Execution |
 | **Web Framework** | ASP.NET Core | Latest | HTTP APIs |
 | **Database** | PostgreSQL | 15 | Persistence |
+| **Cache** | Redis | 7 | Caching/Sessions |
+| **Object Storage** | MinIO | Latest | File Management |
 | **ORM** | Entity Framework Core | Latest | Data Access |
 | **Logging** | Serilog | 4.2.0 | Structured Logs |
 | **Validation** | FluentValidation | 11.11.0 | Input Validation |
@@ -100,6 +102,8 @@ docker-compose up --build
 | **API** | http://localhost:5000 | Backend REST API |
 | **Swagger** | http://localhost:5000/swagger | Interactive documentation |
 | **Database** | localhost:5432 | PostgreSQL (postgres/postgres) |
+| **MinIO Storage** | http://localhost:9000 | Object storage (API) |
+| **MinIO Console** | http://localhost:9001 | Management UI |
 | **Health Check** | http://localhost:5000/api/v1/health | Application status |
 | **Prometheus Metrics** | http://localhost:5000/metrics | Metrics for Prometheus/Grafana |
 
@@ -248,6 +252,8 @@ POSTGRES_PASSWORD=postgres          # Database password
 API_PORT=5000                       # API port
 FRONTEND_PORT=3000                  # Frontend port
 ASPNETCORE_ENVIRONMENT=Production   # Mode (Production/Development)
+MINIO_ROOT_USER=cnabuser            # MinIO access key
+MINIO_ROOT_PASSWORD=cnabpass123     # MinIO secret key
 ```
 
 To customize, edit `.env` and restart:
@@ -255,6 +261,37 @@ To customize, edit `.env` and restart:
 ```bash
 docker-compose down
 docker-compose up -d --build
+```
+
+### MinIO Configuration
+
+MinIO is configured as the object storage service for file uploads and management:
+
+```bash
+# Access MinIO Console (Web UI)
+http://localhost:9001
+
+# Credentials (from .env)
+Username: cnabuser
+Password: cnabpass123
+
+# API Endpoint (used by backend)
+http://minio:9000  # Inside Docker
+http://localhost:9000  # Local access
+```
+
+**Features**:
+- ✅ Async initialization with graceful degradation
+- ✅ Automatic bucket creation on startup
+- ✅ File upload/download/delete operations
+- ✅ Integrated error handling and logging
+- ✅ Production-ready configuration
+
+**Using MinIO for file storage**:
+```csharp
+// The TransactionFacadeService automatically stores uploaded CNAB files in MinIO
+// after successful processing
+await _objectStorageService.UploadFileAsync(bucketName, fileName, stream);
 ```
 
 ## Troubleshooting

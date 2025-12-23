@@ -72,7 +72,7 @@ public static class FileServiceExtensions
         }
 
         // Validate minimum CNAB structure (at least header and one transaction)
-        var lines = fileContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        var lines = fileContent.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length < 2)
         {
             return new FileValidationError(
@@ -90,8 +90,6 @@ public static class FileServiceExtensions
 /// </summary>
 public class EnhancedFileService : IFileService
 {
-    private const long MaxFileSizeBytes = 1024 * 1024; // 1 MB
-    private const string AllowedExtension = ".txt";
 
     /// <summary>
     /// Reads a CNAB file with validation returning specific error codes

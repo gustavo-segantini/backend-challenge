@@ -122,7 +122,7 @@ public class AuthService(
         if (string.IsNullOrWhiteSpace(userId) || !Guid.TryParse(userId, out var guid))
             return ServiceResponse<UserProfileResponse>.Fail(401, "Unauthorized.");
 
-        var user = await _db.Users.FindAsync(new object?[] { guid }, cancellationToken: cancellationToken);
+        var user = await _db.Users.FindAsync([guid], cancellationToken: cancellationToken);
         if (user is null)
             return ServiceResponse<UserProfileResponse>.Fail(401, "Unauthorized.");
 

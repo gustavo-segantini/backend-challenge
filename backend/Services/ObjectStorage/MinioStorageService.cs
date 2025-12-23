@@ -11,24 +11,17 @@ namespace CnabApi.Services.ObjectStorage;
 /// IMPORTANT: No I/O operations in constructor - all async initialization 
 /// is handled by MinioInitializationService (IHostedService).
 /// </summary>
-public class MinioStorageService : IObjectStorageService
+/// <remarks>
+/// Constructor - lightweight, no I/O operations.
+/// </remarks>
+public class MinioStorageService(
+    IMinioClient minioClient,
+    MinioStorageConfiguration config,
+    ILogger<MinioStorageService> logger) : IObjectStorageService
 {
-    private readonly IMinioClient _minioClient;
-    private readonly MinioStorageConfiguration _config;
-    private readonly ILogger<MinioStorageService> _logger;
-
-    /// <summary>
-    /// Constructor - lightweight, no I/O operations.
-    /// </summary>
-    public MinioStorageService(
-        IMinioClient minioClient,
-        MinioStorageConfiguration config,
-        ILogger<MinioStorageService> logger)
-    {
-        _minioClient = minioClient ?? throw new ArgumentNullException(nameof(minioClient));
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+    private readonly IMinioClient _minioClient = minioClient ?? throw new ArgumentNullException(nameof(minioClient));
+    private readonly MinioStorageConfiguration _config = config ?? throw new ArgumentNullException(nameof(config));
+    private readonly ILogger<MinioStorageService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
     /// Uploads a file to MinIO storage.

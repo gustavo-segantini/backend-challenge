@@ -11,21 +11,14 @@ namespace CnabApi.Services.ObjectStorage;
 /// This avoids blocking I/O during dependency injection setup and follows
 /// best practices for async initialization in ASP.NET Core.
 /// </summary>
-public class MinioInitializationService : IHostedService
+public class MinioInitializationService(
+    IMinioClient minioClient,
+    MinioStorageConfiguration config,
+    ILogger<MinioInitializationService> logger) : IHostedService
 {
-    private readonly IMinioClient _minioClient;
-    private readonly MinioStorageConfiguration _config;
-    private readonly ILogger<MinioInitializationService> _logger;
-
-    public MinioInitializationService(
-        IMinioClient minioClient,
-        MinioStorageConfiguration config,
-        ILogger<MinioInitializationService> logger)
-    {
-        _minioClient = minioClient ?? throw new ArgumentNullException(nameof(minioClient));
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+    private readonly IMinioClient _minioClient = minioClient ?? throw new ArgumentNullException(nameof(minioClient));
+    private readonly MinioStorageConfiguration _config = config ?? throw new ArgumentNullException(nameof(config));
+    private readonly ILogger<MinioInitializationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
     /// Starts async initialization - checks/creates MinIO bucket.

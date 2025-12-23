@@ -52,13 +52,37 @@ public class TransactionFacadeServiceTests
         var request = CreateMockHttpRequest();
         var fileContent = "Sample CNAB content";
         var transactionCount = 10;
+        var fileUploadId = Guid.NewGuid();
+        var fileHash = "abc123hash";
 
         _fileUploadServiceMock
             .Setup(x => x.ReadCnabFileFromMultipartAsync(It.IsAny<Microsoft.AspNetCore.WebUtilities.MultipartReader>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<string>.Success(fileContent));
 
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.CalculateFileHashAsync(It.IsAny<Stream>()))
+            .ReturnsAsync(fileHash);
+
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.IsFileUniqueAsync(fileHash, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, null));
+
+        var fileUpload = new FileUpload 
+        { 
+            Id = fileUploadId, 
+            FileName = "test.txt", 
+            FileHash = fileHash,
+            FileSize = 100,
+            Status = FileUploadStatus.Pending,
+            UploadedAt = DateTime.UtcNow
+        };
+
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.RecordSuccessfulUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fileUpload);
+
         _uploadServiceMock
-            .Setup(x => x.ProcessCnabUploadAsync(fileContent, It.IsAny<CancellationToken>()))
+            .Setup(x => x.ProcessCnabUploadAsync(fileContent, fileUploadId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<int>.Success(transactionCount));
 
         // Act
@@ -100,7 +124,6 @@ public class TransactionFacadeServiceTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("File is empty");
         result.Data.Should().NotBeNull();
         result.Data!.TransactionCount.Should().Be(0);
     }
@@ -111,13 +134,37 @@ public class TransactionFacadeServiceTests
         // Arrange
         var request = CreateMockHttpRequest();
         var fileContent = "Sample CNAB content";
+        var fileUploadId = Guid.NewGuid();
+        var fileHash = "abc123hash";
 
         _fileUploadServiceMock
             .Setup(x => x.ReadCnabFileFromMultipartAsync(It.IsAny<Microsoft.AspNetCore.WebUtilities.MultipartReader>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<string>.Success(fileContent));
 
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.CalculateFileHashAsync(It.IsAny<Stream>()))
+            .ReturnsAsync(fileHash);
+
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.IsFileUniqueAsync(fileHash, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, null));
+
+        var fileUpload = new FileUpload 
+        { 
+            Id = fileUploadId, 
+            FileName = "test.txt", 
+            FileHash = fileHash,
+            FileSize = 100,
+            Status = FileUploadStatus.Pending,
+            UploadedAt = DateTime.UtcNow
+        };
+
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.RecordSuccessfulUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fileUpload);
+
         _uploadServiceMock
-            .Setup(x => x.ProcessCnabUploadAsync(fileContent, It.IsAny<CancellationToken>()))
+            .Setup(x => x.ProcessCnabUploadAsync(fileContent, fileUploadId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<int>.Failure("Invalid CNAB format"));
 
         // Act

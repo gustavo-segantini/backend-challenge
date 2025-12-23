@@ -107,7 +107,124 @@ docker-compose up -d --build minio
 
 ---
 
-## Autenticação
+## JWT Token Configuration
+
+### Token Expiration & Renewal
+
+The application uses JWT tokens with the following default configuration:
+
+**Tokens Lifetime**:
+- **Access Token**: 1440 minutes (24 hours) - Short-lived token for API requests
+- **Refresh Token**: 30 days - Long-lived token for obtaining new access tokens
+
+**Configuration** (set in `appsettings.json` or via environment variables):
+```json
+{
+  "Jwt": {
+    "Issuer": "cnab-api",
+    "Audience": "cnab-api-client",
+    "SigningKey": "dev-signing-key-change-me-32-characters-minimum!!",
+    "AccessTokenMinutes": 1440,
+    "RefreshTokenDays": 30
+  }
+}
+```
+
+**Override via Environment Variables** (in `.env`):
+```bash
+Jwt__AccessTokenMinutes=1440
+Jwt__RefreshTokenDays=30
+```
+
+### Token Refresh Flow
+
+When your access token expires, use the refresh token to obtain a new one:
+
+**Endpoint**: `POST /api/v1/auth/refresh`
+
+**Request**:
+```json
+{
+  "refreshToken": "550e8400e29b41d4a716446655440000"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "550e8400e29b41d4a716446655440000",
+  "username": "user@example.com",
+  "role": "User"
+}
+```
+
+**Example cURL**:
+```bash
+curl -X POST http://localhost:5000/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "550e8400e29b41d4a716446655440000"
+  }'
+```
+
+### Troubleshooting Token Issues
+
+**Error: "IDX10223: Lifetime validation failed. The token is expired"**
+
+This error occurs when:
+1. The access token has expired
+2. The client is trying to use the expired token instead of refreshing it
+
+**Solution**:
+- Always check token expiration before making API requests
+- When expired, call the refresh endpoint with your refresh token
+- Store refresh tokens securely (recommend HTTP-only cookies in production)
+
+**Error: "Invalid or expired refresh token"**
+
+This occurs when:
+1. The refresh token has expired (older than 30 days)
+2. The token doesn't exist in the database
+3. The refresh token was revoked
+
+**Solution**:
+- Re-authenticate the user (login again)
+- Implement automatic token refresh on the frontend (before expiration)
+- Check that refresh tokens are being stored correctly
+
+### Best Practices
+
+1. **Always implement token refresh logic on the frontend**:
+   ```javascript
+   // Refresh token before it expires
+   async function refreshTokenIfNeeded() {
+     const tokenExpiration = getTokenExpiration(); // Parse JWT exp claim
+     const now = Date.now();
+     
+     // Refresh if token expires in less than 5 minutes
+     if (tokenExpiration - now < 5 * 60 * 1000) {
+       const newToken = await fetch('/api/v1/auth/refresh', {
+         method: 'POST',
+         body: JSON.stringify({ refreshToken: localStorage.getItem('refreshToken') })
+       });
+       // Store new tokens
+     }
+   }
+   ```
+
+2. **Store tokens securely**:
+   - Use `localStorage` for development (insecure, for demo only)
+   - Use `sessionStorage` for temporary session-only tokens
+   - Use HTTP-only cookies in production (safer against XSS)
+
+3. **Implement retry logic** with exponential backoff for token refresh failures
+
+4. **Monitor token expiration** and proactively refresh before it expires
+
+5. **In production**, increase the clock skew (`ClockSkew`) to handle clock drift between servers
+
+---
 
 ### POST /auth/register
 

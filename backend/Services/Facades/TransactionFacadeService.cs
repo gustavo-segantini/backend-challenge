@@ -19,6 +19,7 @@ public class TransactionFacadeService(
     IObjectStorageService objectStorageService,
     ILogger<TransactionFacadeService> logger) : ITransactionFacadeService
 {
+    private const string DefaultFileName = "uploaded-file";
     public async Task<Result<UploadResult>> UploadCnabFileAsync(HttpRequest request, CancellationToken cancellationToken)
     {
         try
@@ -46,13 +47,8 @@ public class TransactionFacadeService(
                 return Result<UploadResult>.Failure(fileResult.ErrorMessage ?? "File upload validation failed", uploadResult);
             }
 
-            // Calculate file hash for duplicate detection
-            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(fileResult.Data!));
-            var fileHash = await fileUploadTrackingService.CalculateFileHashAsync(stream);
-            var fileSize = stream.Length;
-
-            // Check if file has already been uploaded
-            var duplicateCheckResult = await CheckForDuplicateUploadAsync(fileHash, cancellationToken);
+            // Check for duplicates and calculate file metadata (hash/size) in one pass
+            var (duplicateCheckResult, fileHash, fileSize) = await CheckForDuplicateUploadAsync(fileResult.Data!, cancellationToken);
             if (duplicateCheckResult != null)
             {
                 return duplicateCheckResult;
@@ -63,21 +59,8 @@ public class TransactionFacadeService(
 
             if (!result.IsSuccess)
             {
-                logger.LogWarning("CNAB file upload failed. Error: {Error}", result.ErrorMessage);
-                
-                // Record failed upload
-                await fileUploadTrackingService.RecordFailedUploadAsync(
-                    "uploaded-file",
-                    fileHash,
-                    fileSize,
-                    result.ErrorMessage ?? "Unknown error",
-                    cancellationToken);
-                
-                // Check if it's a content validation error (422) or general error (400)
-                var statusCode = result.ErrorMessage?.Contains("invalid", StringComparison.OrdinalIgnoreCase) ?? false
-                    ? UploadStatusCode.UnprocessableEntity
-                    : UploadStatusCode.BadRequest;
-                
+                await HandleCnabProcessingFailureAsync(result.ErrorMessage, fileHash, fileSize, cancellationToken);
+                var statusCode = DetermineUploadStatusCode(result.ErrorMessage);
                 var uploadResult = CreateFailureUploadResult(statusCode);
                 return Result<UploadResult>.Failure(result.ErrorMessage ?? "Unknown error during upload", uploadResult);
             }
@@ -87,7 +70,7 @@ public class TransactionFacadeService(
 
             // Record successful upload
             await fileUploadTrackingService.RecordSuccessfulUploadAsync(
-                "uploaded-file",
+                DefaultFileName,
                 fileHash,
                 fileSize,
                 result.Data,
@@ -299,28 +282,58 @@ public class TransactionFacadeService(
     }
 
     /// <summary>
-    /// Checks if the uploaded file is a duplicate based on SHA256 hash.
+    /// Handles CNAB processing failures by recording them in the file upload tracking service.
     /// </summary>
+    /// <param name="errorMessage">The error message from the upload service</param>
     /// <param name="fileHash">SHA256 hash of the file content</param>
+    /// <param name="fileSize">Size of the file in bytes</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Failure result if duplicate found, null if file is unique</returns>
-    private async Task<Result<UploadResult>?> CheckForDuplicateUploadAsync(string fileHash, CancellationToken cancellationToken)
+    private async Task HandleCnabProcessingFailureAsync(string? errorMessage, string fileHash, long fileSize, CancellationToken cancellationToken)
     {
+        logger.LogWarning("CNAB file upload failed. Error: {Error}", errorMessage);
+        
+        await fileUploadTrackingService.RecordFailedUploadAsync(
+            DefaultFileName,
+            fileHash,
+            fileSize,
+            errorMessage ?? "Unknown error",
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Checks if the uploaded file is a duplicate based on SHA256 hash.
+    /// Also returns the calculated hash and file size for reuse in subsequent operations.
+    /// </summary>
+    /// <param name="fileContent">The file content to check for duplicates</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Tuple containing: duplicate result (null if unique), file hash, and file size</returns>
+    private async Task<(Result<UploadResult>? duplicateResult, string fileHash, long fileSize)> CheckForDuplicateUploadAsync(
+        string fileContent, 
+        CancellationToken cancellationToken)
+    {
+        // Calculate file hash and size once for reuse
+        var fileBytes = System.Text.Encoding.UTF8.GetBytes(fileContent);
+        using var stream = new MemoryStream(fileBytes);
+        var fileHash = await fileUploadTrackingService.CalculateFileHashAsync(stream);
+        var fileSize = fileBytes.LongLength;
+        
         var (isUnique, existingUpload) = await fileUploadTrackingService.IsFileUniqueAsync(fileHash, cancellationToken);
         if (!isUnique && existingUpload != null)
         {
             logger.LogWarning(
                 "Duplicate file upload rejected. File: {FileName}, Previous upload: {PreviousUpload} ({ProcessedLines} lines)",
-                "uploaded-file",
+                DefaultFileName,
                 existingUpload.FileName,
                 existingUpload.ProcessedLineCount);
 
-            return Result<UploadResult>.Failure(
+            var duplicateResult = Result<UploadResult>.Failure(
                 "Este arquivo já foi processado anteriormente. Para evitar duplicatas, o upload foi rejeitado.",
                 CreateDuplicateUploadResult(existingUpload));
+            
+            return (duplicateResult, fileHash, fileSize);
         }
 
-        return null;
+        return (null, fileHash, fileSize);
     }
 
     /// <summary>

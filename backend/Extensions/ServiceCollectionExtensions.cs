@@ -14,6 +14,8 @@ using CnabApi.Data;
 using CnabApi.Options;
 using CnabApi.Models;
 using CnabApi.Validators;
+using CnabApi.Services;
+using Minio;
 
 namespace CnabApi.Extensions;
 
@@ -345,5 +347,40 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplicationInsightsConfiguration(this IServiceCollection services, IConfiguration configuration)
     {
         return services.AddApplicationInsightsTelemetryConfiguration(configuration);
+    }
+
+    /// <summary>
+    /// Adds MinIO object storage configuration.
+    /// 
+    /// Configures:
+    /// - MinIO client using official SDK pattern (WithEndpoint, WithCredentials, Build)
+    /// - IObjectStorageService implementation (MinioStorageService)
+    /// - MinioInitializationService as IHostedService for async bucket creation
+    /// 
+    /// Note: Bucket initialization happens asynchronously via IHostedService
+    /// to avoid blocking I/O during dependency injection setup.
+    /// </summary>
+    public static IServiceCollection AddMinioConfiguration(this IServiceCollection services, IConfiguration configuration)
+    {
+        // Register MinIO configuration from appsettings
+        var minioConfig = configuration.GetSection("MinIO").Get<Services.ObjectStorage.MinioStorageConfiguration>()
+            ?? new Services.ObjectStorage.MinioStorageConfiguration();
+
+        services.AddSingleton(minioConfig);
+
+        // Register MinIO client using official SDK pattern from readme
+        services.AddMinio(configureClient => configureClient
+            .WithEndpoint(minioConfig.Endpoint)
+            .WithCredentials(minioConfig.AccessKey, minioConfig.SecretKey)
+            .WithSSL(minioConfig.UseSSL)
+            .Build());
+
+        // Register object storage service
+        services.AddScoped<IObjectStorageService, Services.ObjectStorage.MinioStorageService>();
+
+        // Register MinIO initialization as hosted service for async bucket setup
+        services.AddHostedService<Services.ObjectStorage.MinioInitializationService>();
+
+        return services;
     }
 }

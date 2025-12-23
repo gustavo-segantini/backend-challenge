@@ -469,7 +469,7 @@ public class ResiliencePoliciesTests
     {
         // Arrange
         var policy = ResiliencePolicies.GetDatabaseRetryPolicy<string>(_mockLogger.Object);
-        var context = new Polly.Context { { "correlationId", "test-id-123" } };
+        var context = new Context { { "correlationId", "test-id-123" } };
 
         // Act
         var result = await policy.ExecuteAsync(async (ctx) =>

@@ -46,7 +46,7 @@ public class TransactionValidatorTests
     public void Validate_WithNullCpf_ReturnsFail()
     {
         var transaction = CreateValidTransaction();
-        transaction.Cpf = null;
+        transaction.Cpf = null!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -122,7 +122,7 @@ public class TransactionValidatorTests
     public void Validate_WithNullBankCode_ReturnsFail()
     {
         var transaction = CreateValidTransaction();
-        transaction.BankCode = null;
+        transaction.BankCode = null!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -173,7 +173,7 @@ public class TransactionValidatorTests
     public void Validate_WithNullNatureCode_ReturnsFail()
     {
         var transaction = CreateValidTransaction();
-        transaction.NatureCode = null;
+        transaction.NatureCode = null!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -263,7 +263,7 @@ public class TransactionValidatorTests
     public void Validate_WithNullCard_ReturnsFail()
     {
         var transaction = CreateValidTransaction();
-        transaction.Card = null;
+        transaction.Card = null!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -314,7 +314,7 @@ public class TransactionValidatorTests
     public void Validate_WithNullStoreOwner_ReturnsFail()
     {
         var transaction = CreateValidTransaction();
-        transaction.StoreOwner = null;
+        transaction.StoreOwner = null!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -365,7 +365,7 @@ public class TransactionValidatorTests
     public void Validate_WithNullStoreName_ReturnsFail()
     {
         var transaction = CreateValidTransaction();
-        transaction.StoreName = null;
+        transaction.StoreName = null!;
 
         var result = _validator.TestValidate(transaction);
 

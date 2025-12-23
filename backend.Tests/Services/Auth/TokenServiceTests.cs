@@ -46,10 +46,10 @@ public class TokenServiceTests
 
         // Assert
         token.Should().NotBeNullOrWhiteSpace();
-        
+
         var handler = new JwtSecurityTokenHandler();
         handler.CanReadToken(token).Should().BeTrue();
-        
+
         var jwtToken = handler.ReadJwtToken(token);
         jwtToken.Issuer.Should().Be(_jwtOptions.Issuer);
         jwtToken.Audiences.Should().Contain(_jwtOptions.Audience);
@@ -69,7 +69,7 @@ public class TokenServiceTests
         {
             Id = Guid.NewGuid(),
             Username = "testuser",
-            Email = null,
+            Email = null!,
             Role = "Admin"
         };
 
@@ -78,7 +78,7 @@ public class TokenServiceTests
 
         // Assert
         token.Should().NotBeNullOrWhiteSpace();
-        
+
         var handler = new JwtSecurityTokenHandler();
         var jwtToken = handler.ReadJwtToken(token);
         jwtToken.Claims.Should().NotContain(c => c.Type == ClaimTypes.Email);
@@ -94,7 +94,7 @@ public class TokenServiceTests
             Id = Guid.NewGuid(),
             Username = "testuser",
             Email = "test@example.com",
-            Role = null
+            Role = null!
         };
 
         // Act
@@ -125,7 +125,7 @@ public class TokenServiceTests
         // Assert
         var handler = new JwtSecurityTokenHandler();
         var jwtToken = handler.ReadJwtToken(token);
-        
+
         jwtToken.ValidFrom.Should().BeCloseTo(beforeGeneration, TimeSpan.FromSeconds(5));
         jwtToken.ValidTo.Should().BeCloseTo(beforeGeneration.AddMinutes(_jwtOptions.AccessTokenMinutes), TimeSpan.FromSeconds(5));
     }
@@ -248,7 +248,7 @@ public class TokenServiceTests
             Username = "testuser",
             Role = "User"
         };
-        
+
         // Generate a normal token first, then wait a moment and validate it as expired
         var token = _tokenService.GenerateAccessToken(user);
 
@@ -296,7 +296,7 @@ public class TokenServiceTests
             RefreshTokenDays = 7
         });
         var differentService = new TokenService(differentOptions);
-        
+
         var user = new User
         {
             Id = Guid.NewGuid(),

@@ -100,7 +100,7 @@ public class CnabParserService : ICnabParserService
                 StoreName = storeName,
                 TransactionDate = date,
                 TransactionTime = time,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTime.UtcNow
             };
         }
         catch

@@ -26,6 +26,11 @@ public class CnabDbContext(DbContextOptions<CnabDbContext> options) : DbContext(
     /// </summary>
     public DbSet<RefreshToken> RefreshTokens { get; set; }
 
+    /// <summary>
+    /// DbSet for file upload tracking (for duplicate detection).
+    /// </summary>
+    public DbSet<FileUpload> FileUploads { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -115,5 +120,27 @@ public class CnabDbContext(DbContextOptions<CnabDbContext> options) : DbContext(
             .WithMany(u => u.RefreshTokens)
             .HasForeignKey(rt => rt.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // FileUploads configuration
+        modelBuilder.Entity<FileUpload>()
+            .HasKey(fu => fu.Id);
+
+        modelBuilder.Entity<FileUpload>()
+            .HasIndex(fu => fu.FileHash)
+            .IsUnique();
+
+        modelBuilder.Entity<FileUpload>()
+            .Property(fu => fu.FileHash)
+            .IsRequired()
+            .HasMaxLength(64); // SHA256 in hex
+
+        modelBuilder.Entity<FileUpload>()
+            .Property(fu => fu.FileName)
+            .IsRequired()
+            .HasMaxLength(255);
+
+        modelBuilder.Entity<FileUpload>()
+            .Property(fu => fu.Status)
+            .HasConversion<int>();
     }
 }

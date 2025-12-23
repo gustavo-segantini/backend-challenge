@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
 [![Tests](https://img.shields.io/badge/tests-370%20passing-brightgreen)](https://github.com)
-[![Coverage](https://img.shields.io/badge/coverage-89.11%25-brightgreen)](https://github.com)
+[![Coverage](https://img.shields.io/badge/coverage-80.35%25-brightgreen)](https://github.com)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 A robust, production-ready API for processing and analyzing CNAB files with JWT authentication, GitHub OAuth, and enterprise-grade features like structured logging, robust validation, and comprehensive tests.
@@ -29,7 +29,7 @@ A robust, production-ready API for processing and analyzing CNAB files with JWT 
 ✅ **Pagination, filtering, and sorting** on transaction queries  
 ✅ **Structured logging** with end-to-end correlation ID (Serilog)  
 ✅ **Robust validation** with FluentValidation (real CPF, credentials)  
-✅ **Comprehensive tests** (370 tests with 89.11% coverage)  
+✅ **Comprehensive tests** (370 tests with 80.35% coverage)  
 ✅ **Docker Compose** for development and production  
 ✅ **Application Insights** ready for production telemetry  
 ✅ **ProblemDetails RFC 7807** for standardized HTTP responses  
@@ -192,7 +192,7 @@ dotnet test backend.IntegrationTests/CnabApi.IntegrationTests.csproj
 
 ### Code Coverage
 
-The project has **89.11% line coverage**, **73.22% branch coverage**, and **93.22% method coverage** (370 tests).
+The project has **80.35% line coverage**, **68.28% branch coverage**, and **93.22% method coverage** (370 tests).
 
 #### Generate Coverage Report
 

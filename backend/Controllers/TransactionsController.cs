@@ -16,9 +16,7 @@ namespace CnabApi.Controllers;
 /// 
 /// Responsibilities:
 /// - CNAB file uploads and parsing
-/// - Transaction queries with advanced filtering and pagination
-/// - Balance calculations by CPF
-/// - Transaction search functionality
+/// - Transaction queries grouped by store for specific file uploads
 /// - Admin operations for data management
 /// </summary>
 [ApiController]
@@ -124,191 +122,10 @@ public class TransactionsController(
         });
     }
 
-    /// <summary>
-    /// Retrieves transactions for a CPF with pagination, filtering, and ordering.
-    /// 
-    /// Supports advanced query options to retrieve transactions for specific CPF/CNPJ
-    /// with optional date range filtering, transaction type filtering, and sorting.
-    /// </summary>
-    /// <param name="cpf">The CPF/CNPJ to filter transactions (11-14 digits).</param>
-    /// <param name="page">Page number (starting at 1). Default: 1.</param>
-    /// <param name="pageSize">Items per page (1-100). Default: 50.</param>
-    /// <param name="startDate">Filter by start date inclusive (format: YYYY-MM-DD or ISO 8601).</param>
-    /// <param name="endDate">Filter by end date inclusive (format: YYYY-MM-DD or ISO 8601).</param>
-    /// <param name="types">Comma-separated nature codes to filter (e.g., 1,2,3).</param>
-    /// <param name="sort">Sort direction by date: 'asc' or 'desc' (default: 'desc' - most recent first).</param>
-    /// <param name="cancellationToken">Token to cancel the request.</param>
-    /// <returns>Paged list of transactions matching the criteria.</returns>
-    /// <remarks>
-    /// Nature Codes:
-    /// - 1: Débito (debit/expense)
-    /// - 2: Crédito (credit/income)
-    /// - 3: Transferência (transfer)
-    /// - 4: Aluguel (rent)
-    /// - 5: Salário (salary)
-    /// 
-    /// Sample Request:
-    /// GET /api/v1/transactions/12345678901?page=1&amp;pageSize=20&amp;startDate=2019-01-01&amp;endDate=2019-12-31&amp;types=1,2&amp;sort=desc
-    /// Authorization: Bearer {token}
-    /// 
-    /// Sample Response (200):
-    /// {
-    ///   "items": [
-    ///     {
-    ///       "id": "123e4567-e89b-12d3-a456-426614174000",
-    ///       "cpf": "12345678901",
-    ///       "storeName": "Restaurante XYZ",
-    ///       "storeOwner": "João Silva",
-    ///       "transactionDate": "2019-06-15",
-    ///       "transactionTime": "14:30:00",
-    ///       "transactionValue": 150.50,
-    ///       "natureCode": 2,
-    ///       "createdAt": "2025-12-21T10:30:00Z"
-    ///     }
-    ///   ],
-    ///   "totalCount": 45,
-    ///   "pageSize": 20,
-    ///   "currentPage": 1
-    /// }
-    /// 
-    /// Error Cases:
-    /// - 400: Invalid CPF format, invalid date range, or query parameters
-    /// - 401: Missing or invalid authentication token
-    /// - 404: No transactions found for the provided CPF
-    /// </remarks>
-    
-    [HttpGet("{cpf}")]
-    [Authorize]
-    [ProducesResponseType(typeof(PagedResult<Transaction>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<PagedResult<Transaction>>> GetTransactionsByCpf(
-        string cpf,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50,
-        [FromQuery] DateTime? startDate = null,
-        [FromQuery] DateTime? endDate = null,
-        [FromQuery] string? types = null,
-        [FromQuery] string sort = "desc",
-        CancellationToken cancellationToken = default)
-    {
-        var result = await _facadeService.GetTransactionsByCpfAsync(
-            cpf, page, pageSize, startDate, endDate, types, sort, cancellationToken);
-
-        return result.IsSuccess
-            ? Ok(result.Data)
-            : BadRequest(new { error = result.ErrorMessage });
-    }
-
-    /// <summary>
-    /// Calculates and returns the total balance for a specific CPF.
-    /// 
-    /// Balance is calculated as sum of all transactions:
-    /// - Positive values (nature codes 2,3,5): Income/credits
-    /// - Negative values (nature codes 1,4): Expenses/debits
-    /// </summary>
-    /// <param name="cpf">The CPF/CNPJ to calculate balance for (11-14 digits).</param>
-    /// <param name="cancellationToken">Token to cancel the request.</param>
-    /// <returns>Object containing the total balance value for that CPF.</returns>
-    /// <remarks>
-    /// **Sample Request:**
-    /// ```
-    /// GET /api/v1/transactions/12345678901/balance
-    /// Authorization: Bearer {token}
-    /// ```
-    /// 
-    /// **Sample Response (200):**
-    /// ```json
-    /// {
-    ///   "balance": 5250.75
-    /// }
-    /// ```
-    /// 
-    /// **Error Cases:**
-    /// - 400: Invalid CPF format
-    /// - 401: Missing or invalid authentication token
-    /// - 404: No transactions found for the provided CPF
-    /// </remarks>
-    [HttpGet("{cpf}/balance")]
-    [Authorize]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<object>> GetBalance(string cpf, CancellationToken cancellationToken)
-    {
-        var result = await _facadeService.GetBalanceByCpfAsync(cpf, cancellationToken);
-
-        return result.IsSuccess
-            ? Ok(new { balance = result.Data })
-            : BadRequest(new { error = result.ErrorMessage });
-    }
-
-    /// <summary>
-    /// Searches transactions by description for a specific CPF using full-text search.
-    /// 
-    /// Searches across store names and owner names for case-insensitive matches.
-    /// </summary>
-    /// <param name="cpf">The CPF to filter transactions (11-14 digits).</param>
-    /// <param name="searchTerm">The search term to find in transaction descriptions (min 2 characters).</param>
-    /// <param name="page">Page number (starting at 1). Default: 1.</param>
-    /// <param name="pageSize">Items per page (1-100). Default: 50.</param>
-    /// <param name="cancellationToken">Token to cancel the request.</param>
-    /// <returns>Paged list of matching transactions.</returns>
-    /// <remarks>
-    /// Sample Request:
-    /// GET /api/v1/transactions/12345678901/search?searchTerm=restaurante&amp;page=1&amp;pageSize=20
-    /// Authorization: Bearer {token}
-    /// 
-    /// Sample Response (200):
-    /// {
-    ///   "items": [
-    ///     {
-    ///       "id": "123e4567-e89b-12d3-a456-426614174000",
-    ///       "cpf": "12345678901",
-    ///       "storeName": "Restaurante XYZ",
-    ///       "storeOwner": "João Silva",
-    ///       "transactionDate": "2019-06-15",
-    ///       "transactionTime": "14:30:00",
-    ///       "transactionValue": 150.50,
-    ///       "natureCode": 2
-    ///     }
-    ///   ],
-    ///   "totalCount": 5,
-    ///   "pageSize": 20,
-    ///   "currentPage": 1
-    /// }
-    /// 
-    /// Error Cases:
-    /// - 400: Invalid CPF format or search term too short
-    /// - 401: Missing or invalid authentication token
-    /// - 404: No results found
-    /// </remarks>
-    [HttpGet("{cpf}/search")]
-    [Authorize]
-    [ProducesResponseType(typeof(PagedResult<Transaction>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<PagedResult<Transaction>>> SearchTransactions(
-        string cpf,
-        [FromQuery] string searchTerm,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 50,
-        CancellationToken cancellationToken = default)
-    {
-        var result = await _facadeService.SearchTransactionsByDescriptionAsync(
-            cpf, searchTerm, page, pageSize, cancellationToken);
-
-        return result.IsSuccess
-            ? Ok(result.Data)
-            : BadRequest(new { error = result.ErrorMessage });
-    }
 
     /// <summary>
     /// Gets all file uploads with pagination and optional status filter.
-    /// Admin only endpoint for monitoring upload status and progress.
+    /// Available to all authenticated users for monitoring upload status and progress.
     /// </summary>
     /// <param name="page">Page number (1-based). Default: 1.</param>
     /// <param name="pageSize">Items per page (1-100). Default: 50.</param>
@@ -318,15 +135,14 @@ public class TransactionsController(
     /// <remarks>
     /// **Sample Request:**
     /// ```
-    /// GET /api/v1/transactions/uploads?page=1&pageSize=20&status=Processing
+    /// GET /api/v1/transactions/uploads?page=1&amp;pageSize=20&amp;status=Processing
     /// Authorization: Bearer {token}
     /// ```
     /// </remarks>
     [HttpGet("uploads")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllUploads(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
@@ -378,6 +194,7 @@ public class TransactionsController(
     /// <summary>
     /// Lists incomplete uploads that are stuck in Processing status.
     /// Useful for detecting uploads that were interrupted and need to be resumed.
+    /// Available to all authenticated users.
     /// </summary>
     /// <param name="timeoutMinutes">Maximum minutes an upload can be in Processing status before being considered stuck. Default: 30.</param>
     /// <param name="cancellationToken">Token to cancel the request.</param>
@@ -409,10 +226,9 @@ public class TransactionsController(
     /// ```
     /// </remarks>
     [HttpGet("uploads/incomplete")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetIncompleteUploads(
         [FromQuery] int timeoutMinutes = 30,
         CancellationToken cancellationToken = default)
@@ -597,6 +413,69 @@ public class TransactionsController(
             resumedUploads = resumedUploads,
             errors = errors.Count > 0 ? errors : null
         });
+    }
+
+    /// <summary>
+    /// Gets transactions grouped by store name and owner for a specific file upload, with balance calculated for each store.
+    /// 
+    /// Returns transactions organized by store from a specific uploaded file, making it easy to see all transactions
+    /// and the balance for each store in that file.
+    /// </summary>
+    /// <param name="uploadId">The ID of the file upload to get transactions from.</param>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
+    /// <returns>List of stores with their transactions and balances.</returns>
+    /// <remarks>
+    /// **Sample Request:**
+    /// ```
+    /// GET /api/v1/transactions/stores/{uploadId}
+    /// Authorization: Bearer {token}
+    /// ```
+    /// 
+    /// **Sample Response (200):**
+    /// ```json
+    /// [
+    ///   {
+    ///     "storeName": "BAR DO JOÃO",
+    ///     "storeOwner": "096.206.760-17",
+    ///     "transactions": [
+    ///       {
+    ///         "id": 1,
+    ///         "storeName": "BAR DO JOÃO",
+    ///         "storeOwner": "096.206.760-17",
+    ///         "transactionDate": "2019-03-01T00:00:00Z",
+    ///         "transactionTime": "15:34:53",
+    ///         "amount": 142.00,
+    ///         "natureCode": "3"
+    ///       }
+    ///     ],
+    ///     "balance": -102.00
+    ///   }
+    /// ]
+    /// ```
+    /// </remarks>
+    [HttpGet("stores/{uploadId}")]
+    [Authorize]
+    [ProducesResponseType(typeof(List<StoreGroupedTransactions>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<List<StoreGroupedTransactions>>> GetTransactionsGroupedByStore(
+        Guid uploadId,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _facadeService.GetTransactionsGroupedByStoreAsync(uploadId, cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.ErrorMessage });
+        }
+
+        if (result.Data == null || result.Data.Count == 0)
+        {
+            return NotFound(new { error = "No transactions found for this upload" });
+        }
+
+        return Ok(result.Data);
     }
 
     /// <summary>

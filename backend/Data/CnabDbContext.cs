@@ -91,6 +91,10 @@ public class CnabDbContext(DbContextOptions<CnabDbContext> options) : DbContext(
             .HasIndex(t => t.IdempotencyKey)
             .IsUnique();
 
+        // Index on FileUploadId for faster lookups by upload
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => t.FileUploadId);
+
         // Users configuration
         modelBuilder.Entity<User>()
             .HasKey(u => u.Id);

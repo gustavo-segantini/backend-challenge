@@ -97,6 +97,11 @@ public class CnabUploadServiceTests
 			.Returns(_serviceScopeMock.Object);
 
 		// Setup service provider to return mocks
+		// Note: GetRequiredService is an extension method, so we only mock GetService
+		// The GetRequiredService extension will call GetService and throw if null
+		var cnabParserServiceMock = new Mock<ICnabParserService>().Object;
+		var unitOfWorkMock = new Mock<IUnitOfWork>().Object;
+
 		_serviceProviderMock
 			.Setup(x => x.GetService(typeof(ITransactionService)))
 			.Returns(_transactionServiceMock.Object);
@@ -105,13 +110,13 @@ public class CnabUploadServiceTests
 			.Returns(_fileUploadTrackingServiceMock.Object);
 		_serviceProviderMock
 			.Setup(x => x.GetService(typeof(ICnabParserService)))
-			.Returns(new Mock<ICnabParserService>().Object);
+			.Returns(cnabParserServiceMock);
 		_serviceProviderMock
 			.Setup(x => x.GetService(typeof(IHashService)))
 			.Returns(_hashServiceMock.Object);
 		_serviceProviderMock
 			.Setup(x => x.GetService(typeof(IUnitOfWork)))
-			.Returns(new Mock<IUnitOfWork>().Object);
+			.Returns(unitOfWorkMock);
 
 		var optionsMock = Mock.Of<IOptions<UploadProcessingOptions>>(x => x.Value == _options);
 
@@ -133,6 +138,18 @@ public class CnabUploadServiceTests
 		// Arrange
 		var fileUploadId = Guid.NewGuid();
 		var fileContent = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       \r\n";
+
+		var fileUpload = new FileUpload
+		{
+			Id = fileUploadId,
+			ProcessedLineCount = 0,
+			FailedLineCount = 0,
+			SkippedLineCount = 0
+		};
+
+		_fileUploadTrackingServiceMock
+			.Setup(x => x.GetUploadByIdAsync(fileUploadId, It.IsAny<CancellationToken>()))
+			.ReturnsAsync(fileUpload);
 
 		_fileUploadTrackingServiceMock
 			.Setup(x => x.SetTotalLineCountAsync(fileUploadId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -190,6 +207,18 @@ public class CnabUploadServiceTests
 		var fileUploadId = Guid.NewGuid();
 		var fileContent = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       \r\n";
 
+		var fileUpload = new FileUpload
+		{
+			Id = fileUploadId,
+			ProcessedLineCount = 0,
+			FailedLineCount = 0,
+			SkippedLineCount = 0
+		};
+
+		_fileUploadTrackingServiceMock
+			.Setup(x => x.GetUploadByIdAsync(fileUploadId, It.IsAny<CancellationToken>()))
+			.ReturnsAsync(fileUpload);
+
 		_fileUploadTrackingServiceMock
 			.Setup(x => x.SetTotalLineCountAsync(fileUploadId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
 			.Returns(Task.CompletedTask);
@@ -230,6 +259,18 @@ public class CnabUploadServiceTests
 		// Arrange
 		var fileUploadId = Guid.NewGuid();
 		var fileContent = "invalid line content\r\n";
+
+		var fileUpload = new FileUpload
+		{
+			Id = fileUploadId,
+			ProcessedLineCount = 0,
+			FailedLineCount = 0,
+			SkippedLineCount = 0
+		};
+
+		_fileUploadTrackingServiceMock
+			.Setup(x => x.GetUploadByIdAsync(fileUploadId, It.IsAny<CancellationToken>()))
+			.ReturnsAsync(fileUpload);
 
 		_fileUploadTrackingServiceMock
 			.Setup(x => x.SetTotalLineCountAsync(fileUploadId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -274,6 +315,19 @@ public class CnabUploadServiceTests
 		var fileUploadId = Guid.NewGuid();
 		var fileContent = "line1\r\nline2\r\nline3\r\n";
 		var startFromLine = 2; // Resume from line 2
+
+		var fileUpload = new FileUpload
+		{
+			Id = fileUploadId,
+			ProcessedLineCount = 1,
+			FailedLineCount = 0,
+			SkippedLineCount = 0,
+			LastCheckpointLine = 1
+		};
+
+		_fileUploadTrackingServiceMock
+			.Setup(x => x.GetUploadByIdAsync(fileUploadId, It.IsAny<CancellationToken>()))
+			.ReturnsAsync(fileUpload);
 
 		_fileUploadTrackingServiceMock
 			.Setup(x => x.SetTotalLineCountAsync(fileUploadId, It.IsAny<int>(), It.IsAny<CancellationToken>()))

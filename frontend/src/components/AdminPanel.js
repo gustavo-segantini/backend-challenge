@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import Spinner from './Spinner';
+import StoreGroupedTransactions from './StoreGroupedTransactions';
 import './AdminPanel.css';
 
 function AdminPanel({ userInfo }) {
@@ -13,6 +14,10 @@ function AdminPanel({ userInfo }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [selectedUploadId, setSelectedUploadId] = useState(null);
+  const [selectedUpload, setSelectedUpload] = useState(null);
+  const [groupedTransactions, setGroupedTransactions] = useState([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -22,6 +27,8 @@ function AdminPanel({ userInfo }) {
     duplicate: 0,
     partiallyCompleted: 0
   });
+
+  const isAdmin = userInfo?.role === 'Admin';
 
   useEffect(() => {
     loadUploads();
@@ -130,10 +137,39 @@ function AdminPanel({ userInfo }) {
       setTimeout(() => setMessage(null), 5000);
       loadUploads();
       loadIncompleteUploads();
+      setSelectedUploadId(null);
+      setSelectedUpload(null);
+      setGroupedTransactions([]);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to clear data');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleSelectUpload = async (upload) => {
+    if (upload.status === 'Success') {
+      setSelectedUploadId(upload.id);
+      setSelectedUpload(upload);
+      await loadTransactionsForUpload(upload.id);
+    } else {
+      setSelectedUploadId(null);
+      setSelectedUpload(null);
+      setGroupedTransactions([]);
+    }
+  };
+
+  const loadTransactionsForUpload = async (uploadId) => {
+    try {
+      setLoadingTransactions(true);
+      setError(null);
+      const response = await api.get(`/transactions/stores/${uploadId}`);
+      setGroupedTransactions(response.data || []);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to load transactions');
+      setGroupedTransactions([]);
+    } finally {
+      setLoadingTransactions(false);
     }
   };
 
@@ -202,27 +238,29 @@ function AdminPanel({ userInfo }) {
       </div>
 
       {/* Actions Section */}
-      <div className="admin-actions">
-        <h3>Actions</h3>
-        <div className="actions-buttons">
-          {incompleteUploads.length > 0 && (
+      {isAdmin && (
+        <div className="admin-actions">
+          <h3>Actions</h3>
+          <div className="actions-buttons">
+            {incompleteUploads.length > 0 && (
+              <button
+                className="btn btn-warning"
+                onClick={handleResumeAll}
+                disabled={actionLoading}
+              >
+                {actionLoading ? 'Processing...' : `Resume All Incomplete (${incompleteUploads.length})`}
+              </button>
+            )}
             <button
-              className="btn btn-warning"
-              onClick={handleResumeAll}
+              className="btn btn-danger"
+              onClick={handleClearData}
               disabled={actionLoading}
             >
-              {actionLoading ? 'Processing...' : `Resume All Incomplete (${incompleteUploads.length})`}
+              {actionLoading ? 'Processing...' : 'Clear All Data'}
             </button>
-          )}
-          <button
-            className="btn btn-danger"
-            onClick={handleClearData}
-            disabled={actionLoading}
-          >
-            {actionLoading ? 'Processing...' : 'Clear All Data'}
-          </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Incomplete Uploads Section */}
       {incompleteUploads.length > 0 && (
@@ -278,13 +316,18 @@ function AdminPanel({ userInfo }) {
                       <small>Line: {upload.lastCheckpointLine || 0}</small>
                     </td>
                     <td>
-                      <button
-                        className="btn btn-sm btn-primary"
-                        onClick={() => handleResumeUpload(upload.id)}
-                        disabled={actionLoading}
-                      >
-                        Resume
-                      </button>
+                      {isAdmin && (
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => handleResumeUpload(upload.id)}
+                          disabled={actionLoading}
+                        >
+                          Resume
+                        </button>
+                      )}
+                      {!isAdmin && (
+                        <span className="text-muted">Admin only</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -345,7 +388,12 @@ function AdminPanel({ userInfo }) {
                     </tr>
                   ) : (
                     uploads.map(upload => (
-                      <tr key={upload.id}>
+                      <tr 
+                        key={upload.id}
+                        className={selectedUploadId === upload.id ? 'selected-row' : ''}
+                        onClick={() => handleSelectUpload(upload)}
+                        style={{ cursor: upload.status === 'Success' ? 'pointer' : 'default' }}
+                      >
                         <td>{upload.fileName}</td>
                         <td>
                           <span className={`badge ${getStatusBadgeClass(upload.status)}`}>
@@ -394,15 +442,21 @@ function AdminPanel({ userInfo }) {
                         <td>{formatDate(upload.uploadedAt)}</td>
                         <td>{formatDate(upload.processingCompletedAt)}</td>
                         <td>
-                          {upload.status === 'Processing' && upload.lastCheckpointLine > 0 && (
+                          {upload.status === 'Processing' && upload.lastCheckpointLine > 0 && isAdmin && (
                             <button
                               className="btn btn-sm btn-primary"
-                              onClick={() => handleResumeUpload(upload.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleResumeUpload(upload.id);
+                              }}
                               disabled={actionLoading}
                               title={`Resume from line ${upload.lastCheckpointLine}`}
                             >
                               Resume
                             </button>
+                          )}
+                          {upload.status === 'Success' && (
+                            <span className="select-hint">Click to view summary</span>
                           )}
                         </td>
                       </tr>
@@ -437,6 +491,18 @@ function AdminPanel({ userInfo }) {
           </>
         )}
       </div>
+
+      {/* Transactions Summary Section */}
+      {selectedUploadId && selectedUpload && (
+        <div className="transactions-summary-section">
+          <h3>Summary for: {selectedUpload.fileName}</h3>
+          {loadingTransactions ? (
+            <Spinner />
+          ) : (
+            <StoreGroupedTransactions stores={groupedTransactions} />
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,137 @@
+.store-grouped-container {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 20px;
+}
+
+.store-grouped-container h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 24px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.stores-table {
+  overflow-x: auto;
+}
+
+.stores-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.stores-table thead {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.stores-table th {
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: #2c3e50;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.stores-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.stores-table tbody tr.transaction-row {
+  background-color: white;
+}
+
+.stores-table tbody tr.transaction-row:nth-child(odd) {
+  background-color: #f8f9fa;
+}
+
+.stores-table tbody tr.transaction-row:hover {
+  background-color: #e9ecef;
+}
+
+.stores-table tbody tr.balance-row {
+  background-color: #e3f2fd !important;
+  font-weight: 600;
+}
+
+.stores-table tbody tr.balance-row:hover {
+  background-color: #bbdefb !important;
+}
+
+.balance-label {
+  text-align: right;
+  padding-right: 20px !important;
+  color: #2c3e50;
+}
+
+.balance-value {
+  font-weight: 700;
+  font-size: 15px;
+  text-align: right;
+}
+
+.balance-value.positive {
+  color: #27ae60;
+}
+
+.balance-value.negative {
+  color: #e74c3c;
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.value-positive {
+  color: #27ae60;
+  font-weight: 500;
+}
+
+.value-negative {
+  color: #e74c3c;
+  font-weight: 500;
+}
+
+.empty-message {
+  color: #7f8c8d;
+  font-style: italic;
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .stores-table {
+    font-size: 12px;
+  }
+
+  .stores-table th,
+  .stores-table td {
+    padding: 8px 4px;
+  }
+
+  .stores-table th {
+    font-size: 10px;
+  }
+
+  .type-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+}
+

@@ -23,7 +23,6 @@ public interface ITransactionService
 
     /// <summary>
     /// Adds a single transaction to the context without saving (for use with Unit of Work).
-    /// Does not invalidate cache - caller should handle that after commit.
     /// </summary>
     /// <param name="transaction">The transaction to add.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -31,32 +30,16 @@ public interface ITransactionService
     Task<Result<Transaction>> AddTransactionToContextAsync(Transaction transaction, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Invalidates cache for a specific CPF.
-    /// </summary>
-    Task InvalidateCacheForCpfAsync(string cpf, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Retrieves transactions for a specific CPF with pagination and filters.
-    /// </summary>
-    Task<Result<PagedResult<Transaction>>> GetTransactionsByCpfAsync(TransactionQueryOptions options, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Calculates the total balance for a specific CPF.
-    /// </summary>
-    Task<Result<decimal>> GetBalanceByCpfAsync(string cpf, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Clears all transactions from the database.
     /// </summary>
     Task<Result> ClearAllDataAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Searches transactions by description using full-text search.
+    /// Gets transactions grouped by store name and owner, with balance calculated for each store.
     /// </summary>
-    Task<Result<PagedResult<Transaction>>> SearchTransactionsByDescriptionAsync(
-        string cpf,
-        string searchTerm,
-        int page = 1,
-        int pageSize = 20,
+    /// <param name="uploadId">Optional upload ID to filter transactions by a specific file upload.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<Result<List<StoreGroupedTransactions>>> GetTransactionsGroupedByStoreAsync(
+        Guid? uploadId = null,
         CancellationToken cancellationToken = default);
 }

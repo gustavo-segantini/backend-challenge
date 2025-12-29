@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import './App.css';
 import UploadForm from './components/UploadForm';
-import TransactionList from './components/TransactionList';
 import LoginForm from './components/LoginForm';
 import AdminPanel from './components/AdminPanel';
 import Spinner from './components/Spinner';
@@ -9,21 +8,14 @@ import Toast from './components/Toast';
 import api, { setAuthToken, getStoredToken } from './services/api';
 
 function App() {
-  const [cpf, setCpf] = useState('');
-  const [transactions, setTransactions] = useState([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
-  const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
-  const [searched, setSearched] = useState(false);
   const [authError, setAuthError] = useState(null);
   const [token, setToken] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
   const [currentView, setCurrentView] = useState('main'); // 'main' or 'admin'
+  const loadingUserInfoRef = useRef(false);
 
   const isAuthenticated = Boolean(token);
   const isAdmin = userInfo?.role === 'Admin';
@@ -58,85 +50,34 @@ function App() {
     }
   }, []);
 
-  const loadTransactions = async (searchCpf, targetPage = 1) => {
-    if (!isAuthenticated) {
-      setError('Please log in to search.');
-      return;
-    }
-    if (!searchCpf || searchCpf.trim() === '') {
-      setError('Please enter a CPF/CNPJ');
-      return;
-    }
-
-    try {
-      const isInitialLoad = targetPage === 1;
-      if (isInitialLoad) {
-        setLoading(true);
-      } else {
-        setIsLoadingMore(true);
+  useEffect(() => {
+    // Load user info when token exists but userInfo is missing
+    const loadUserInfo = async () => {
+      if (token && !userInfo && !loadingUserInfoRef.current) {
+        loadingUserInfoRef.current = true;
+        try {
+          const res = await api.get('/auth/me');
+          setUserInfo({ username: res.data.username, role: res.data.role });
+        } catch (err) {
+          // If token is invalid, clear it
+          if (err.response?.status === 401) {
+            setAuthToken(null);
+            setToken(null);
+          }
+        } finally {
+          loadingUserInfoRef.current = false;
+        }
       }
-      setError(null);
+    };
 
-      const [transRes, balanceRes] = await Promise.all([
-        api.get(`/transactions/${searchCpf}`, {
-          params: {
-            page: targetPage,
-            pageSize,
-          },
-        }),
-        targetPage === 1 ? api.get(`/transactions/${searchCpf}/balance`) : Promise.resolve({ data: { balance: null } }),
-      ]);
-
-      const paged = transRes.data || {};
-      const newItems = paged.items || [];
-
-      // On initial load, replace; on pagination, append
-      if (isInitialLoad) {
-        setTransactions(newItems);
-        setBalance(balanceRes.data.balance);
-      } else {
-        setTransactions((prev) => [...prev, ...newItems]);
-      }
-
-      setTotalCount(paged.totalCount || 0);
-      setPage(targetPage);
-      setSearched(true);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load transactions');
-      if (targetPage === 1) {
-        setTransactions([]);
-        setTotalCount(0);
-      }
-      setBalance(null);
-    } finally {
-      setLoading(false);
-      setIsLoadingMore(false);
-    }
-  };
+    loadUserInfo();
+  }, [token, userInfo]);
 
   const handleUpload = async (success, msg) => {
     if (success) {
       setMessage(msg);
       setTimeout(() => setMessage(null), 5000);
-      // Clear previous search after upload
-      setTransactions([]);
-      setTotalCount(0);
-      setBalance(null);
-      setSearched(false);
-      setCpf('');
-      setPage(1);
     }
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setPage(1);
-    loadTransactions(cpf, 1);
-  };
-
-  const handlePageChange = (newPage) => {
-    if (newPage < 1) return;
-    loadTransactions(cpf, newPage);
   };
 
   return (
@@ -152,14 +93,12 @@ function App() {
             >
               Main
             </button>
-            {isAdmin && (
-              <button
-                className={`nav-btn ${currentView === 'admin' ? 'active' : ''}`}
-                onClick={() => setCurrentView('admin')}
-              >
-                Administration
-              </button>
-            )}
+            <button
+              className={`nav-btn ${currentView === 'admin' ? 'active' : ''}`}
+              onClick={() => setCurrentView('admin')}
+            >
+              Administration
+            </button>
           </nav>
         )}
       </header>
@@ -182,9 +121,6 @@ function App() {
             setAuthToken(null);
             setToken(null);
             setUserInfo(null);
-            setTransactions([]);
-            setBalance(null);
-            setSearched(false);
           }}
           onGitHub={() => {
             const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
@@ -217,7 +153,7 @@ function App() {
               <h2>Authentication Required</h2>
               <p>Please log in to upload files and search transactions.</p>
             </div>
-          ) : currentView === 'admin' && isAdmin ? (
+          ) : currentView === 'admin' ? (
             <AdminPanel userInfo={userInfo} />
           ) : (
             <>
@@ -225,55 +161,10 @@ function App() {
                 <UploadForm onUpload={handleUpload} isAuthenticated={isAuthenticated} />
               </section>
 
-              <section className="search-section">
-                <form onSubmit={handleSearch} className="search-form">
-                  <div className="search-input-group">
-                    <input
-                      type="text"
-                      placeholder="Enter CPF/CNPJ (11 digits)"
-                      value={cpf}
-                      onChange={(e) => setCpf(e.target.value)}
-                      className="search-input"
-                      maxLength="11"
-                    />
-                    <button type="submit" className="btn btn-primary" disabled={loading || !isAuthenticated}>
-                      {loading ? 'Searching...' : 'Search Transactions'}
-                    </button>
-                  </div>
-                </form>
-              </section>
-
               <section className="data-section">
-                {loading ? (
-                  <Spinner />
-                ) : searched ? (
-                  <>
-                    {balance !== null && (
-                      <div className="balance-card">
-                        <h2>Balance for CPF: {cpf}</h2>
-                        <p className={`balance-value ${balance >= 0 ? 'positive' : 'negative'}`}>
-                          {new Intl.NumberFormat('pt-BR', {
-                            style: 'currency',
-                            currency: 'BRL',
-                          }).format(balance)}
-                        </p>
-                      </div>
-                    )}
-
-                    <TransactionList
-                      transactions={transactions}
-                      cpf={cpf}
-                      totalCount={totalCount}
-                      pageSize={pageSize}
-                      onPageChange={handlePageChange}
-                      isLoadingMore={isLoadingMore}
-                    />
-                  </>
-                ) : (
-                  <div className="empty-state">
-                    <p>Upload a CNAB file and search by CPF/CNPJ to view transactions</p>
-                  </div>
-                )}
+                <div className="empty-state">
+                  <p>Upload a CNAB file and go to Administration to view transactions grouped by store</p>
+                </div>
               </section>
             </>
           )}

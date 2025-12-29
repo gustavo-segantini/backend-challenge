@@ -33,5 +33,17 @@ public class UploadProcessingOptions
     /// Default: 500
     /// </summary>
     public int RetryDelayMs { get; set; } = 500;
+
+    /// <summary>
+    /// Interval in minutes for checking incomplete uploads (recovery service).
+    /// Default: 5 minutes
+    /// </summary>
+    public int RecoveryCheckIntervalMinutes { get; set; } = 5;
+
+    /// <summary>
+    /// Timeout in minutes before considering an upload as stuck in Processing status.
+    /// Default: 30 minutes
+    /// </summary>
+    public int StuckUploadTimeoutMinutes { get; set; } = 30;
 }
 

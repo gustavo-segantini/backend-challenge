@@ -55,6 +55,7 @@ try
     if (builder.Environment.EnvironmentName != "Test")
     {
         builder.Services.AddHostedService<CnabApi.Services.Hosted.UploadProcessingHostedService>();
+        builder.Services.AddHostedService<CnabApi.Services.Hosted.IncompleteUploadRecoveryService>();
     }
 
     // ========== Configure HTTP Request Pipeline ==========

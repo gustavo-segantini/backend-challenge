@@ -123,4 +123,25 @@ public class RedisDistributedLockService(IConnectionMultiplexer redis, ILogger<R
             await ReleaseLockAsync(key, lockValue, cancellationToken);
         }
     }
+
+    public async Task<bool> LockExistsAsync(string key, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var db = redis.GetDatabase();
+            var lockKey = $"{LockKeyPrefix}{key}";
+            
+            var exists = await db.KeyExistsAsync(lockKey);
+            
+            logger.LogDebug("Lock existence check. Key: {LockKey}, Exists: {Exists}", lockKey, exists);
+            
+            return exists;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error checking lock existence. Key: {Key}", key);
+            // If we can't check, assume lock exists to be safe (don't recover)
+            return true;
+        }
+    }
 }

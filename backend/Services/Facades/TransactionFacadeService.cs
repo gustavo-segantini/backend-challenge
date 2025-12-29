@@ -203,117 +203,6 @@ public class TransactionFacadeService(
         }
     }
 
-    public async Task<Result<PagedResult<Transaction>>> GetTransactionsByCpfAsync(
-        string cpf,
-        int page,
-        int pageSize,
-        DateTime? startDate,
-        DateTime? endDate,
-        string? types,
-        string sort,
-        CancellationToken cancellationToken)
-    {
-        logger.LogInformation(
-            "Retrieving transactions for CPF: {Cpf}. Page: {Page}, PageSize: {PageSize}, StartDate: {StartDate}, EndDate: {EndDate}, Types: {Types}",
-            cpf, page, pageSize, startDate, endDate, types);
-
-        try
-        {
-            var natureCodes = ParseCommaSeparatedList(types);
-
-            var queryOptions = new TransactionQueryOptions
-            {
-                Cpf = cpf,
-                Page = page,
-                PageSize = pageSize,
-                StartDate = startDate,
-                EndDate = endDate,
-                NatureCodes = natureCodes,
-                SortDirection = sort
-            };
-
-            var result = await transactionService.GetTransactionsByCpfAsync(queryOptions, cancellationToken);
-
-            if (!result.IsSuccess)
-            {
-                logger.LogWarning("Failed to retrieve transactions for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
-                return Result<PagedResult<Transaction>>.Failure(result.ErrorMessage ?? "Failed to retrieve transactions");
-            }
-
-            logger.LogInformation(
-                "Successfully retrieved transactions for CPF: {Cpf}. Count: {Count}, TotalCount: {TotalCount}",
-                cpf, result.Data?.Items.Count, result.Data?.TotalCount);
-
-            return Result<PagedResult<Transaction>>.Success(result.Data!);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Unexpected error retrieving transactions for CPF: {Cpf}", cpf);
-            return Result<PagedResult<Transaction>>.Failure($"An unexpected error occurred: {ex.Message}");
-        }
-    }
-
-    public async Task<Result<decimal>> GetBalanceByCpfAsync(string cpf, CancellationToken cancellationToken)
-    {
-        logger.LogInformation("Calculating balance for CPF: {Cpf}", cpf);
-
-        try
-        {
-            var result = await transactionService.GetBalanceByCpfAsync(cpf, cancellationToken);
-
-            if (!result.IsSuccess)
-            {
-                logger.LogWarning("Failed to calculate balance for CPF: {Cpf}. Error: {Error}", cpf, result.ErrorMessage);
-                return Result<decimal>.Failure(result.ErrorMessage ?? "Failed to calculate balance");
-            }
-
-            logger.LogInformation("Successfully calculated balance for CPF: {Cpf}. Balance: {Balance}", cpf, result.Data);
-
-            return Result<decimal>.Success(result.Data);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Unexpected error calculating balance for CPF: {Cpf}", cpf);
-            return Result<decimal>.Failure($"An unexpected error occurred: {ex.Message}");
-        }
-    }
-
-    public async Task<Result<PagedResult<Transaction>>> SearchTransactionsByDescriptionAsync(
-        string cpf,
-        string searchTerm,
-        int page,
-        int pageSize,
-        CancellationToken cancellationToken)
-    {
-        logger.LogInformation(
-            "Searching transactions for CPF: {Cpf}. SearchTerm: {SearchTerm}, Page: {Page}, PageSize: {PageSize}",
-            cpf, searchTerm, page, pageSize);
-
-        try
-        {
-            var result = await transactionService.SearchTransactionsByDescriptionAsync(
-                cpf, searchTerm, page, pageSize, cancellationToken);
-
-            if (!result.IsSuccess)
-            {
-                logger.LogWarning(
-                    "Search failed for CPF: {Cpf}, SearchTerm: {SearchTerm}. Error: {Error}",
-                    cpf, searchTerm, result.ErrorMessage);
-                return Result<PagedResult<Transaction>>.Failure(result.ErrorMessage ?? "Search failed");
-            }
-
-            logger.LogInformation(
-                "Search completed for CPF: {Cpf}, SearchTerm: {SearchTerm}. Results: {Count}",
-                cpf, searchTerm, result.Data?.Items.Count);
-
-            return Result<PagedResult<Transaction>>.Success(result.Data!);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Unexpected error searching transactions for CPF: {Cpf}, SearchTerm: {SearchTerm}", cpf, searchTerm);
-            return Result<PagedResult<Transaction>>.Failure($"An unexpected error occurred: {ex.Message}");
-        }
-    }
 
     public async Task<Result> ClearAllDataAsync(CancellationToken cancellationToken)
     {
@@ -338,6 +227,22 @@ public class TransactionFacadeService(
             logger.LogError(ex, "Unexpected error during data clear operation");
             return Result.Failure($"An unexpected error occurred: {ex.Message}");
         }
+    }
+
+    public async Task<Result<List<StoreGroupedTransactions>>> GetTransactionsGroupedByStoreAsync(
+        Guid? uploadId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (uploadId.HasValue)
+        {
+            logger.LogInformation("Fetching transactions grouped by store for upload {UploadId}", uploadId.Value);
+        }
+        else
+        {
+            logger.LogInformation("Fetching all transactions grouped by store");
+        }
+        var result = await transactionService.GetTransactionsGroupedByStoreAsync(uploadId, cancellationToken);
+        return result;
     }
 
     /// <summary>

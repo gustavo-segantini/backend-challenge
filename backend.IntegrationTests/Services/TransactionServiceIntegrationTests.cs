@@ -32,7 +32,8 @@ public class TransactionServiceIntegrationTests : IntegrationTestBase
                 StoreOwner = "Store Owner",
                 StoreName = "Test Store",
                 TransactionDate = DateTime.UtcNow,
-                TransactionTime = TimeSpan.FromHours(12)
+                TransactionTime = TimeSpan.FromHours(12),
+                IdempotencyKey = "test-key-1"
             },
             new()
             {
@@ -44,7 +45,8 @@ public class TransactionServiceIntegrationTests : IntegrationTestBase
                 StoreOwner = "Store Owner",
                 StoreName = "Test Store",
                 TransactionDate = DateTime.UtcNow,
-                TransactionTime = TimeSpan.FromHours(12).Add(TimeSpan.FromMinutes(1))
+                TransactionTime = TimeSpan.FromHours(12).Add(TimeSpan.FromMinutes(1)),
+                IdempotencyKey = "test-key-2"
             }
         };
 
@@ -137,7 +139,8 @@ public class TransactionServiceIntegrationTests : IntegrationTestBase
                 StoreOwner = "Owner",
                 StoreName = "Store",
                 TransactionDate = DateTime.UtcNow,
-                TransactionTime = TimeSpan.Zero
+                TransactionTime = TimeSpan.Zero,
+                IdempotencyKey = "get-test-key-1"
             },
             new()
             {
@@ -149,7 +152,8 @@ public class TransactionServiceIntegrationTests : IntegrationTestBase
                 StoreOwner = "Owner",
                 StoreName = "Store",
                 TransactionDate = DateTime.UtcNow.AddDays(-1),
-                TransactionTime = TimeSpan.Zero
+                TransactionTime = TimeSpan.Zero,
+                IdempotencyKey = "get-test-key-2"
             }
         };
 

@@ -187,4 +187,35 @@ public interface IFileUploadTrackingService
         int failedCount,
         int skippedCount,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds incomplete uploads that are stuck in Processing status.
+    /// Uploads are considered stuck if they've been in Processing status for longer than the specified timeout.
+    /// </summary>
+    /// <param name="timeoutMinutes">Maximum minutes an upload can be in Processing status before being considered stuck.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of incomplete uploads that need to be resumed.</returns>
+    Task<List<FileUpload>> FindIncompleteUploadsAsync(int timeoutMinutes = 30, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks if an upload is incomplete (hasn't processed all lines yet).
+    /// </summary>
+    /// <param name="uploadId">The FileUpload ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if upload is incomplete, false otherwise.</returns>
+    Task<bool> IsUploadIncompleteAsync(Guid uploadId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets all file uploads with pagination and optional status filter.
+    /// </summary>
+    /// <param name="page">Page number (1-based).</param>
+    /// <param name="pageSize">Items per page.</param>
+    /// <param name="status">Optional status filter.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Paged result with uploads and total count.</returns>
+    Task<(List<FileUpload> Uploads, int TotalCount)> GetAllUploadsAsync(
+        int page = 1,
+        int pageSize = 50,
+        FileUploadStatus? status = null,
+        CancellationToken cancellationToken = default);
 }

@@ -435,4 +435,81 @@ public class FileUploadTrackingService(
             "Processing result updated. UploadId: {UploadId}, Status: {Status}, Processed: {Processed}, Failed: {Failed}, Skipped: {Skipped}",
             uploadId, fileUpload.Status, processedCount, failedCount, skippedCount);
     }
+
+    public async Task<List<FileUpload>> FindIncompleteUploadsAsync(int timeoutMinutes = 30, CancellationToken cancellationToken = default)
+    {
+        var timeoutThreshold = DateTime.UtcNow.AddMinutes(-timeoutMinutes);
+
+        // Find uploads that are:
+        // 1. In Processing status
+        // 2. Started processing more than timeoutMinutes ago
+        // 3. AND either:
+        //    - Have no checkpoint (never saved progress), OR
+        //    - Last checkpoint was more than timeoutMinutes ago (no recent progress)
+        var incompleteUploads = await _db.FileUploads
+            .Where(u => u.Status == FileUploadStatus.Processing &&
+                       u.ProcessingStartedAt.HasValue &&
+                       u.ProcessingStartedAt.Value < timeoutThreshold &&
+                       (u.LastCheckpointAt == null || u.LastCheckpointAt.Value < timeoutThreshold))
+            .ToListAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Found {Count} incomplete uploads (stuck in Processing status for more than {TimeoutMinutes} minutes with no recent checkpoint)",
+            incompleteUploads.Count, timeoutMinutes);
+
+        return incompleteUploads;
+    }
+
+    public async Task<bool> IsUploadIncompleteAsync(Guid uploadId, CancellationToken cancellationToken = default)
+    {
+        var fileUpload = await _db.FileUploads.FindAsync(new object[] { uploadId }, cancellationToken: cancellationToken);
+
+        if (fileUpload == null)
+        {
+            return false;
+        }
+
+        // Upload is incomplete if:
+        // 1. Status is Processing or Pending
+        // 2. Or if TotalLineCount > 0 and ProcessedLineCount + FailedLineCount + SkippedLineCount < TotalLineCount
+        if (fileUpload.Status == FileUploadStatus.Processing || fileUpload.Status == FileUploadStatus.Pending)
+        {
+            return true;
+        }
+
+        if (fileUpload.TotalLineCount > 0)
+        {
+            var totalProcessed = fileUpload.ProcessedLineCount + fileUpload.FailedLineCount + fileUpload.SkippedLineCount;
+            return totalProcessed < fileUpload.TotalLineCount;
+        }
+
+        return false;
+    }
+
+    public async Task<(List<FileUpload> Uploads, int TotalCount)> GetAllUploadsAsync(
+        int page = 1,
+        int pageSize = 50,
+        FileUploadStatus? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _db.FileUploads.AsQueryable();
+
+        // Apply status filter if provided
+        if (status.HasValue)
+        {
+            query = query.Where(u => u.Status == status.Value);
+        }
+
+        // Get total count
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        // Apply pagination and ordering (most recent first)
+        var uploads = await query
+            .OrderByDescending(u => u.UploadedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (uploads, totalCount);
+    }
 }

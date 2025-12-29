@@ -86,6 +86,11 @@ public class CnabDbContext(DbContextOptions<CnabDbContext> options) : DbContext(
         modelBuilder.Entity<Transaction>()
             .HasIndex(t => t.NatureCode);
 
+        // Unique index on IdempotencyKey to prevent duplicate transaction processing
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => t.IdempotencyKey)
+            .IsUnique();
+
         // Users configuration
         modelBuilder.Entity<User>()
             .HasKey(u => u.Id);

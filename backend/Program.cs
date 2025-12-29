@@ -49,6 +49,14 @@ try
     // Authentication
     builder.Services.AddJwtAuthenticationConfiguration(jwtOptions);
 
+    // Register background upload processing service (only if not in Test environment)
+    // In test environments, this is not registered to avoid DI resolution issues
+    // The queue and lock services used by this service are only available in production
+    if (builder.Environment.EnvironmentName != "Test")
+    {
+        builder.Services.AddHostedService<CnabApi.Services.Hosted.UploadProcessingHostedService>();
+    }
+
     // ========== Configure HTTP Request Pipeline ==========
     
     var app = builder.Build();

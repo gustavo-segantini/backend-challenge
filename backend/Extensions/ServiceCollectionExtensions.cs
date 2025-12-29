@@ -186,6 +186,7 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.Configure<GitHubOAuthOptions>(configuration.GetSection("GitHubOAuth"));
+        services.Configure<UploadProcessingOptions>(configuration.GetSection(UploadProcessingOptions.SectionName));
 
         var jwtOptions = configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
         if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey) || jwtOptions.SigningKey.Length < 32)
@@ -237,22 +238,36 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Adds caching configuration (Redis for production, in-memory for test).
+    /// Also registers IConnectionMultiplexer for distributed locking and queue services.
     /// </summary>
     public static IServiceCollection AddCachingConfiguration(this IServiceCollection services, WebApplicationBuilder builder)
     {
         if (builder.Environment.EnvironmentName == "Test")
         {
             services.AddMemoryCache();
+            // For test environment, register mock/stub services that work correctly for tests
+            // These provide basic queue and lock functionality without Redis
+            services.AddSingleton<Services.Interfaces.IUploadQueueService, Services.Testing.MockUploadQueueService>();
+            services.AddSingleton<Services.Interfaces.IDistributedLockService, Services.Testing.MockDistributedLockService>();
         }
         else
         {
             var redisConnection = builder.Configuration.GetConnectionString("RedisConnection")
                 ?? "localhost:6379";
 
+            // Add IConnectionMultiplexer for distributed locking and queues
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(sp =>
+                StackExchange.Redis.ConnectionMultiplexer.Connect(redisConnection));
+
             services.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnection;
             });
+
+            // Register Redis-based queue and lock services as singletons
+            // (required for use in HostedService which is singleton)
+            services.AddSingleton<Services.Interfaces.IUploadQueueService, Services.RedisUploadQueueService>();
+            services.AddSingleton<Services.Interfaces.IDistributedLockService, Services.RedisDistributedLockService>();
         }
 
         return services;
@@ -331,9 +346,24 @@ public static class ServiceCollectionExtensions
             .AddClasses(filter => filter
                 .Where(t => (t.Name.EndsWith("Service") || t.Name.EndsWith("Handler")) 
                        && !t.IsAbstract 
-                       && !t.IsInterface))
+                       && !t.IsInterface
+                       && t.Name != "UploadProcessingHostedService" // Exclude HostedService as it's registered manually
+                       && t.Namespace != "CnabApi.Services.Testing")) // Exclude test mocks
             .AsMatchingInterface()
             .WithScopedLifetime());
+
+        // Explicitly register HashService to ensure it's available (stateless, can be singleton)
+        services.AddSingleton<Services.Interfaces.IHashService, Services.HashService>();
+
+        // Register Unit of Work as scoped (one per request/operation)
+        services.AddScoped<Services.UnitOfWork.IUnitOfWork, Services.UnitOfWork.EfCoreUnitOfWork>();
+
+        // Register line processing services explicitly (not caught by Scrutor due to naming)
+        services.AddScoped<Services.LineProcessing.ILineProcessor, Services.LineProcessing.LineProcessor>();
+        services.AddScoped<Services.LineProcessing.ICheckpointManager, Services.LineProcessing.CheckpointManager>();
+
+        // Register Status Code Strategy Factory as singleton
+        services.AddSingleton<Services.StatusCodes.UploadStatusCodeStrategyFactory>();
 
         // Register password hasher as singleton
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();

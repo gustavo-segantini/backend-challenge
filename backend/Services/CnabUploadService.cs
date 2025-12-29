@@ -175,11 +175,27 @@ public class CnabUploadService(
             // Wait for all tasks to complete
             await Task.WhenAll(tasks);
 
-            // Final checkpoint - create a scope for this final update
+            // Final checkpoint - save checkpoint before final status update to ensure progress is saved
             using (var finalScope = serviceScopeFactory.CreateScope())
             {
                 var finalFileUploadTrackingService = finalScope.ServiceProvider.GetRequiredService<IFileUploadTrackingService>();
                 var finalMaxLine = processedLines.DefaultIfEmpty(startFromLine).Max();
+                
+                // Save final checkpoint to ensure progress is persisted even if final status update fails
+                if (finalMaxLine > startFromLine)
+                {
+                    await checkpointManager.SaveCheckpointAsync(
+                        fileUploadId,
+                        finalMaxLine,
+                        processedCount,
+                        failedCount,
+                        skippedCount,
+                        finalFileUploadTrackingService,
+                        logger,
+                        cancellationToken);
+                }
+
+                // Update final processing result
                 await finalFileUploadTrackingService.UpdateProcessingResultAsync(
                     fileUploadId,
                     processedCount,

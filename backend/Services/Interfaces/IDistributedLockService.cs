@@ -44,4 +44,12 @@ public interface IDistributedLockService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Tuple of (lockAcquired, result)</returns>
     Task<(bool LockAcquired, T? Result)> ExecuteWithLockAsync<T>(string key, Func<Task<T>> action, int expirationSeconds = 300, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks if a lock exists (is currently held) without attempting to acquire it.
+    /// </summary>
+    /// <param name="key">Lock key identifier</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True if lock exists, false otherwise</returns>
+    Task<bool> LockExistsAsync(string key, CancellationToken cancellationToken = default);
 }

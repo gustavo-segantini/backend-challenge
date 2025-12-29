@@ -83,4 +83,14 @@ public class MockDistributedLockService : IDistributedLockService
             await ReleaseLockAsync(key, "", cancellationToken);
         }
     }
+
+    public Task<bool> LockExistsAsync(string key, CancellationToken cancellationToken = default)
+    {
+        lock (_locks)
+        {
+            var exists = _locks.ContainsKey(key);
+            _logger.LogInformation("MockDistributedLockService: Lock existence check for '{Key}': {Exists}", key, exists);
+            return Task.FromResult(exists);
+        }
+    }
 }

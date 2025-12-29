@@ -82,4 +82,109 @@ public interface IFileUploadTrackingService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the asynchronous save operation</returns>
     Task CommitLineHashesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records a pending file upload (for background processing queue).
+    /// Creates FileUpload record with Pending status before queue processing.
+    /// </summary>
+    /// <param name="fileName">Original filename.</param>
+    /// <param name="fileHash">SHA256 hash of the file content.</param>
+    /// <param name="fileSize">File size in bytes.</param>
+    /// <param name="storagePath">Path to the file in MinIO storage.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The created FileUpload record.</returns>
+    Task<FileUpload> RecordPendingUploadAsync(
+        string fileName,
+        string fileHash,
+        long fileSize,
+        string storagePath,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates the processing status of a file upload.
+    /// Called when background processing begins.
+    /// </summary>
+    /// <param name="uploadId">The FileUpload ID.</param>
+    /// <param name="status">The new status.</param>
+    /// <param name="retryCount">Current retry attempt count.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task UpdateProcessingStatusAsync(
+        Guid uploadId,
+        FileUploadStatus status,
+        int retryCount,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records successful completion of file upload processing.
+    /// </summary>
+    /// <param name="uploadId">The FileUpload ID.</param>
+    /// <param name="processedLineCount">Number of transactions processed.</param>
+    /// <param name="storagePath">Path to the file in object storage.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task UpdateProcessingSuccessAsync(
+        Guid uploadId,
+        int processedLineCount,
+        string? storagePath,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records failure of file upload processing.
+    /// </summary>
+    /// <param name="uploadId">The FileUpload ID.</param>
+    /// <param name="errorMessage">Error message describing the failure.</param>
+    /// <param name="retryCount">Number of retry attempts made.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task UpdateProcessingFailureAsync(
+        Guid uploadId,
+        string errorMessage,
+        int retryCount,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Retrieves a file upload record by ID.
+    /// </summary>
+    /// <param name="uploadId">The FileUpload ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The FileUpload record or null if not found.</returns>
+    Task<FileUpload?> GetUploadByIdAsync(Guid uploadId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates the checkpoint for resumable processing.
+    /// </summary>
+    /// <param name="uploadId">The FileUpload ID.</param>
+    /// <param name="lastCheckpointLine">Last successfully processed line index.</param>
+    /// <param name="processedCount">Total lines processed successfully.</param>
+    /// <param name="failedCount">Total lines that failed.</param>
+    /// <param name="skippedCount">Total lines skipped (duplicates).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task UpdateCheckpointAsync(
+        Guid uploadId,
+        int lastCheckpointLine,
+        int processedCount,
+        int failedCount,
+        int skippedCount,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the total line count for a file upload.
+    /// </summary>
+    /// <param name="uploadId">The FileUpload ID.</param>
+    /// <param name="totalLineCount">Total number of lines in the file.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task SetTotalLineCountAsync(Guid uploadId, int totalLineCount, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates processing result with detailed counts.
+    /// </summary>
+    /// <param name="uploadId">The FileUpload ID.</param>
+    /// <param name="processedCount">Lines processed successfully.</param>
+    /// <param name="failedCount">Lines that failed after retries.</param>
+    /// <param name="skippedCount">Lines skipped as duplicates.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task UpdateProcessingResultAsync(
+        Guid uploadId,
+        int processedCount,
+        int failedCount,
+        int skippedCount,
+        CancellationToken cancellationToken = default);
 }

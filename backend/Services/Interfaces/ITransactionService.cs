@@ -14,6 +14,28 @@ public interface ITransactionService
     Task<Result<List<Transaction>>> AddTransactionsAsync(List<Transaction> transactions, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Adds a single transaction atomically with immediate commit.
+    /// </summary>
+    /// <param name="transaction">The transaction to add.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Result with the added transaction or error.</returns>
+    Task<Result<Transaction>> AddSingleTransactionAsync(Transaction transaction, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds a single transaction to the context without saving (for use with Unit of Work).
+    /// Does not invalidate cache - caller should handle that after commit.
+    /// </summary>
+    /// <param name="transaction">The transaction to add.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Result with the transaction if valid, or error.</returns>
+    Task<Result<Transaction>> AddTransactionToContextAsync(Transaction transaction, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Invalidates cache for a specific CPF.
+    /// </summary>
+    Task InvalidateCacheForCpfAsync(string cpf, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Retrieves transactions for a specific CPF with pagination and filters.
     /// </summary>
     Task<Result<PagedResult<Transaction>>> GetTransactionsByCpfAsync(TransactionQueryOptions options, CancellationToken cancellationToken = default);

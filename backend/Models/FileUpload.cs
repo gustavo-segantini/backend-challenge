@@ -94,7 +94,7 @@ public class FileUpload
     /// <summary>
     /// Collection of line hashes from this file for tracking individual line duplicates.
     /// </summary>
-    public ICollection<FileUploadLineHash> LineHashes { get; set; } = new List<FileUploadLineHash>();
+    public ICollection<FileUploadLineHash> LineHashes { get; set; } = [];
 }
 
 /// <summary>
@@ -106,7 +106,7 @@ public enum FileUploadStatus
     Pending = 0,
 
     /// <summary>Upload is currently being processed.</summary>
-    Processing = 1,
+     Processing = 1,
 
     /// <summary>Upload and processing completed successfully.</summary>
     Success = 2,

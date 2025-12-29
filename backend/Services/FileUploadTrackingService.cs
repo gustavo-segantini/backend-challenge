@@ -364,6 +364,8 @@ public class FileUploadTrackingService(
             return;
         }
 
+        // Checkpoint receives total counts (not incremental), so use them directly
+        // The calling code is responsible for calculating totals correctly
         fileUpload.LastCheckpointLine = lastCheckpointLine;
         fileUpload.LastCheckpointAt = DateTime.UtcNow;
         fileUpload.ProcessedLineCount = processedCount;
@@ -418,22 +420,50 @@ public class FileUploadTrackingService(
         fileUpload.SkippedLineCount = skippedCount;
         fileUpload.ProcessingCompletedAt = DateTime.UtcNow;
 
+        // Calculate total processed lines
+        var totalProcessed = processedCount + failedCount + skippedCount;
+        var allLinesProcessed = fileUpload.TotalLineCount > 0 && totalProcessed >= fileUpload.TotalLineCount;
+
         // Determine final status
-        if (failedCount > 0)
+        if (allLinesProcessed)
         {
-            fileUpload.Status = FileUploadStatus.PartiallyCompleted;
+            // All lines have been processed - determine final status
+            if (failedCount > 0)
+            {
+                fileUpload.Status = FileUploadStatus.PartiallyCompleted;
+            }
+            else
+            {
+                fileUpload.Status = FileUploadStatus.Success;
+            }
+            
+            // Update last checkpoint to the final line if all are processed
+            if (fileUpload.TotalLineCount > 0)
+            {
+                fileUpload.LastCheckpointLine = fileUpload.TotalLineCount - 1; // 0-based index
+                fileUpload.LastCheckpointAt = DateTime.UtcNow;
+            }
         }
         else
         {
-            fileUpload.Status = FileUploadStatus.Success;
+            // Not all lines processed yet - keep Processing status if it was Processing
+            // Only change status if it's not already Processing or Pending
+            if (fileUpload.Status != FileUploadStatus.Processing && fileUpload.Status != FileUploadStatus.Pending)
+            {
+                // If we have some failures but not all lines processed, mark as partially completed
+                if (failedCount > 0)
+                {
+                    fileUpload.Status = FileUploadStatus.PartiallyCompleted;
+                }
+            }
         }
 
         _db.FileUploads.Update(fileUpload);
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Processing result updated. UploadId: {UploadId}, Status: {Status}, Processed: {Processed}, Failed: {Failed}, Skipped: {Skipped}",
-            uploadId, fileUpload.Status, processedCount, failedCount, skippedCount);
+            "Processing result updated. UploadId: {UploadId}, Status: {Status}, Processed: {Processed}, Failed: {Failed}, Skipped: {Skipped}, Total: {Total}, AllProcessed: {AllProcessed}",
+            uploadId, fileUpload.Status, processedCount, failedCount, skippedCount, totalProcessed, allLinesProcessed);
     }
 
     public async Task<List<FileUpload>> FindIncompleteUploadsAsync(int timeoutMinutes = 30, CancellationToken cancellationToken = default)

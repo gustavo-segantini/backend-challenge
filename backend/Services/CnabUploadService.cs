@@ -69,8 +69,9 @@ public class CnabUploadService(
             var lastCheckpointLine = new AtomicInt(startFromLine);
 
             // Lines to process (skip already processed)
+            // Map to absolute line index (original position in file) for checkpoint tracking
             var linesToProcess = lines
-                .Select((line, index) => (Line: line, Index: index))
+                .Select((line, originalIndex) => (Line: line, OriginalIndex: originalIndex))
                 .Skip(startFromLine)
                 .ToArray();
 
@@ -87,7 +88,7 @@ public class CnabUploadService(
             var tasks = new List<Task>();
             var processedLines = new ConcurrentBag<int>();
 
-            foreach (var (line, index) in linesToProcess)
+            foreach (var (line, originalIndex) in linesToProcess)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -106,9 +107,10 @@ public class CnabUploadService(
                     try
                     {
                         // Delegate line processing to ILineProcessor (with Unit of Work for ACID compliance)
+                        // Use originalIndex (absolute position in file) for idempotency and checkpoint tracking
                         var result = await lineProcessor.ProcessLineAsync(
                             line,
-                            index,
+                            originalIndex,
                             fileUploadId,
                             fileHash,
                             transactionService,
@@ -134,7 +136,8 @@ public class CnabUploadService(
                                 break;
                         }
 
-                        processedLines.Add(index);
+                        // Store absolute line index for checkpoint tracking
+                        processedLines.Add(originalIndex);
 
                         // Delegate checkpoint logic to ICheckpointManager
                         var currentProcessed = Interlocked.CompareExchange(ref processedCount, 0, 0) + 
@@ -150,16 +153,39 @@ public class CnabUploadService(
                             if (maxProcessedLine > currentLastCheckpoint && 
                                 lastCheckpointLine.CompareAndSwap(currentLastCheckpoint, maxProcessedLine))
                             {
-                                // Fire and forget checkpoint save (non-blocking)
-                                _ = checkpointManager.SaveCheckpointAsync(
-                                    fileUploadId,
-                                    maxProcessedLine,
-                                    Interlocked.CompareExchange(ref processedCount, 0, 0),
-                                    Interlocked.CompareExchange(ref failedCount, 0, 0),
-                                    Interlocked.CompareExchange(ref skippedCount, 0, 0),
-                                    fileUploadTrackingService,
-                                    logger,
-                                    cancellationToken);
+                                // Get current totals from database to calculate checkpoint totals
+                                // This is async but fire-and-forget, so we don't await
+                                _ = Task.Run(async () =>
+                                {
+                                    try
+                                    {
+                                        using var checkpointScope = serviceScopeFactory.CreateScope();
+                                        var checkpointFileUploadTrackingService = checkpointScope.ServiceProvider.GetRequiredService<IFileUploadTrackingService>();
+                                        
+                                        var uploadRecord = await checkpointFileUploadTrackingService.GetUploadByIdAsync(fileUploadId, cancellationToken);
+                                        if (uploadRecord == null) return;
+                                        
+                                        // Calculate totals: previous + incremental
+                                        var checkpointProcessed = uploadRecord.ProcessedLineCount + Interlocked.CompareExchange(ref processedCount, 0, 0);
+                                        var checkpointFailed = uploadRecord.FailedLineCount + Interlocked.CompareExchange(ref failedCount, 0, 0);
+                                        var checkpointSkipped = uploadRecord.SkippedLineCount + Interlocked.CompareExchange(ref skippedCount, 0, 0);
+                                        
+                                        // Save checkpoint with totals
+                                        await checkpointManager.SaveCheckpointAsync(
+                                            fileUploadId,
+                                            maxProcessedLine,
+                                            checkpointProcessed,
+                                            checkpointFailed,
+                                            checkpointSkipped,
+                                            checkpointFileUploadTrackingService,
+                                            logger,
+                                            cancellationToken);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        logger.LogWarning(ex, "Error saving checkpoint in background. UploadId: {UploadId}", fileUploadId);
+                                    }
+                                }, cancellationToken);
                             }
                         }
                     }
@@ -179,29 +205,63 @@ public class CnabUploadService(
             using (var finalScope = serviceScopeFactory.CreateScope())
             {
                 var finalFileUploadTrackingService = finalScope.ServiceProvider.GetRequiredService<IFileUploadTrackingService>();
-                var finalMaxLine = processedLines.DefaultIfEmpty(startFromLine).Max();
                 
-                // Save final checkpoint to ensure progress is persisted even if final status update fails
-                if (finalMaxLine > startFromLine)
+                // Get current upload record to calculate totals
+                var uploadRecord = await finalFileUploadTrackingService.GetUploadByIdAsync(fileUploadId, cancellationToken);
+                
+                if (uploadRecord == null)
+                {
+                    logger.LogWarning("Upload record not found for final update. UploadId: {UploadId}", fileUploadId);
+                    return Result<int>.Failure("Upload record not found");
+                }
+                
+                // Calculate total processed lines (including previously processed from checkpoints)
+                var previousProcessed = uploadRecord.ProcessedLineCount;
+                var previousFailed = uploadRecord.FailedLineCount;
+                var previousSkipped = uploadRecord.SkippedLineCount;
+                
+                // Sum incremental counts with previous totals
+                var totalProcessed = previousProcessed + processedCount;
+                var totalFailed = previousFailed + failedCount;
+                var totalSkipped = previousSkipped + skippedCount;
+                var totalProcessedLines = totalProcessed + totalFailed + totalSkipped;
+                
+                // Calculate final max line (absolute index in original file)
+                var finalMaxLine = processedLines.Count > 0 
+                    ? processedLines.Max() 
+                    : startFromLine;
+                
+                // Determine checkpoint line: if all lines processed, use last line index; otherwise use max processed
+                var allLinesProcessed = totalLines > 0 && totalProcessedLines >= totalLines;
+                var checkpointLine = allLinesProcessed 
+                    ? totalLines - 1  // All lines processed, checkpoint at last line (0-based index)
+                    : finalMaxLine;   // Not all processed yet, use max processed line
+                
+                // Save final checkpoint with totals
+                if (checkpointLine >= startFromLine)
                 {
                     await checkpointManager.SaveCheckpointAsync(
                         fileUploadId,
-                        finalMaxLine,
-                        processedCount,
-                        failedCount,
-                        skippedCount,
+                        checkpointLine,
+                        totalProcessed,
+                        totalFailed,
+                        totalSkipped,
                         finalFileUploadTrackingService,
                         logger,
                         cancellationToken);
                 }
 
-                // Update final processing result
+                // Update final processing result with totals
                 await finalFileUploadTrackingService.UpdateProcessingResultAsync(
                     fileUploadId,
-                    processedCount,
-                    failedCount,
-                    skippedCount,
+                    totalProcessed,
+                    totalFailed,
+                    totalSkipped,
                     cancellationToken);
+                
+                logger.LogInformation(
+                    "Final update completed. UploadId: {UploadId}, TotalProcessed: {Total}, AllLinesProcessed: {AllProcessed}, CheckpointLine: {Checkpoint}",
+                    fileUploadId, totalProcessedLines, allLinesProcessed, checkpointLine);
             }
 
             logger.LogInformation(

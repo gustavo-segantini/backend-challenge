@@ -10,7 +10,7 @@ namespace CnabApi.IntegrationTests.Controllers;
 public class TransactionsControllerIntegrationTests : IntegrationTestBase
 {
     [Fact]
-    public async Task GetTransactionsByCpf_WithValidCpf_Returns200()
+    public async Task Transaction_CanBeSavedToDatabase()
     {
         // Arrange
         using var context = DbContext;

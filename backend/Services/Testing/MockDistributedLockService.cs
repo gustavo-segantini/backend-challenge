@@ -8,7 +8,7 @@ namespace CnabApi.Services.Testing;
 /// </summary>
 public class MockDistributedLockService : IDistributedLockService
 {
-    private readonly Dictionary<string, string> _locks = new();
+    private readonly Dictionary<string, string> _locks = [];
     private readonly ILogger<MockDistributedLockService> _logger;
 
     public MockDistributedLockService(ILogger<MockDistributedLockService> logger)

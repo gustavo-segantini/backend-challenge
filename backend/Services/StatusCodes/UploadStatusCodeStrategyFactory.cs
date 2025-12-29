@@ -12,14 +12,14 @@ public class UploadStatusCodeStrategyFactory
 
     public UploadStatusCodeStrategyFactory()
     {
-        _strategies = new List<IUploadStatusCodeStrategy>
-        {
+        _strategies =
+        [
             new EmptyFileStatusCodeStrategy(),
             new UnsupportedMediaTypeStatusCodeStrategy(),
             new PayloadTooLargeStatusCodeStrategy(),
             new InvalidFormatStatusCodeStrategy(),
             new DefaultStatusCodeStrategy()
-        };
+        ];
     }
 
     /// <summary>

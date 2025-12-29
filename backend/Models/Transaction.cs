@@ -116,6 +116,11 @@ public class Transaction
     [Column(TypeName = "timestamp with time zone")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Reference to the FileUpload that created this transaction.
+    /// </summary>
+    public Guid? FileUploadId { get; set; }
+
     // Calculated properties for display and business logic
 
     /// <summary>

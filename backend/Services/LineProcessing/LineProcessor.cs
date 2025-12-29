@@ -57,6 +57,7 @@ public class LineProcessor : ILineProcessor
 
                 var transaction = parseResult.Data;
                 transaction.IdempotencyKey = GenerateIdempotencyKey(fileHash, lineIndex);
+                transaction.FileUploadId = fileUploadId;
 
                 // Step 3 & 4: Insert transaction AND record line hash atomically using Unit of Work (ACID)
                 try
@@ -91,20 +92,8 @@ public class LineProcessor : ILineProcessor
                             cancellationToken);
 
                         // Unit of Work will call SaveChangesAsync for both operations atomically
-                        return insertResult.Data!; // Return transaction for cache invalidation after commit
+                        return insertResult.Data!;
                     }, cancellationToken);
-
-                    // After successful commit, invalidate cache
-                    // Note: This is outside the transaction scope, so it's safe
-                    try
-                    {
-                        await transactionService.InvalidateCacheForCpfAsync(committedTransaction.Cpf, cancellationToken);
-                    }
-                    catch (Exception cacheEx)
-                    {
-                        // Don't fail the whole operation if cache invalidation fails
-                        logger.LogWarning(cacheEx, "Failed to invalidate cache after transaction commit. CPF: {Cpf}", committedTransaction.Cpf);
-                    }
 
                     logger.LogDebug(
                         "Line processed successfully (committed atomically). UploadId: {UploadId}, LineIndex: {Index}",

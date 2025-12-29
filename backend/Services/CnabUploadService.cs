@@ -1,220 +1,239 @@
 using CnabApi.Common;
 using CnabApi.Models;
 using CnabApi.Services.Interfaces;
-using CnabApi.Services.Resilience;
-using CnabApi.Utilities;
-using System.Security.Cryptography;
-using System.Text;
+using CnabApi.Services.LineProcessing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 
 namespace CnabApi.Services;
 
 /// <summary>
-/// Implementation of CNAB upload service.
-/// Orchestrates the workflow: File Reading → Parsing → Database Storage.
-/// Includes resilience patterns: retry with exponential backoff, idempotency keys.
+/// Orchestrates CNAB file processing with parallel workers.
+/// Follows Single Responsibility Principle - only orchestrates, delegates to specialized services.
+/// Uses ILineProcessor for line processing and ICheckpointManager for checkpoint logic.
 /// </summary>
-/// <remarks>
-/// Initializes the CNAB upload service with required dependencies.
-/// </remarks>
 public class CnabUploadService(
-    ICnabParserService parserService,
-    ITransactionService transactionService,
-    IFileUploadTrackingService fileUploadTrackingService,
+    IHashService hashService,
+    ILineProcessor lineProcessor,
+    ICheckpointManager checkpointManager,
+    IServiceScopeFactory serviceScopeFactory,
+    IOptions<UploadProcessingOptions> options,
     ILogger<CnabUploadService> logger) : ICnabUploadService
 {
-    private readonly ICnabParserService _parserService = parserService;
-    private readonly ITransactionService _transactionService = transactionService;
-    private readonly IFileUploadTrackingService _fileUploadTrackingService = fileUploadTrackingService;
-    private readonly ILogger<CnabUploadService> _logger = logger;
+    private readonly UploadProcessingOptions _options = options.Value;
 
     /// <summary>
-    /// Processes a complete CNAB file upload workflow with resilience and line-level duplicate detection.
-    /// Accepts file content as a string for streaming/memory-efficient processing.
+    /// Processes CNAB file content line by line with parallel workers.
+    /// Each line is validated, parsed, and inserted atomically with retry.
+    /// Checkpoints are saved periodically for resume support.
     /// </summary>
-    /// <param name="fileContent">The CNAB file content to process</param>
-    /// <param name="fileUploadId">The FileUpload ID for tracking line hashes (optional for backward compatibility)</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Result with the count of successfully imported transactions.</returns>
-    public async Task<Result<int>> ProcessCnabUploadAsync(string fileContent, Guid fileUploadId = default, CancellationToken cancellationToken = default)
+    public async Task<Result<int>> ProcessCnabUploadAsync(
+        string fileContent,
+        Guid fileUploadId,
+        int startFromLine = 0,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            // Step 1: Validate file content
             if (string.IsNullOrWhiteSpace(fileContent))
             {
-                _logger.LogWarning("File content validation failed: {Error}", "File was not provided or is empty.");
+                logger.LogWarning("File content is empty");
                 return Result<int>.Failure("File was not provided or is empty.");
             }
 
-            // Step 2: Parse file content
-            var parseResult = _parserService.ParseCnabFile(fileContent);
-            if (!parseResult.IsSuccess)
+            var lines = fileContent.Split(["\r\n", "\r", "\n"], StringSplitOptions.None)
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .ToArray();
+
+            var totalLines = lines.Length;
+            
+            // Set total line count - create a scope for this
+            using (var initScope = serviceScopeFactory.CreateScope())
             {
-                _logger.LogWarning("File parsing failed: {Error}", parseResult.ErrorMessage);
-                return Result<int>.Failure(parseResult.ErrorMessage ?? "File parsing failed");
+                var initFileUploadTrackingService = initScope.ServiceProvider.GetRequiredService<IFileUploadTrackingService>();
+                await initFileUploadTrackingService.SetTotalLineCountAsync(fileUploadId, totalLines, cancellationToken);
             }
 
-            // Step 3: Compute file hash for idempotency
-            var fileHash = ComputeFileHash(fileContent);
-            
-            // Step 4: Validate lines for duplicates and build transactions with idempotency
-            var (transactionsWithIdempotency, duplicateLineCount) = await ValidateAndBuildTransactionsWithIdempotencyAsync(
-                parseResult.Data!,
-                fileContent,
-                fileHash,
-                fileUploadId,
-                cancellationToken);
+            logger.LogInformation(
+                "Starting line-by-line processing. UploadId: {UploadId}, TotalLines: {Total}, StartFrom: {Start}, Workers: {Workers}",
+                fileUploadId, totalLines, startFromLine, _options.ParallelWorkers);
 
-            // Step 4.5: Commit all pending line hashes to database (if any were recorded)
-            if (fileUploadId != default)
+            // Compute file hash for idempotency keys
+            var fileHash = hashService.ComputeFileHash(fileContent);
+
+            // Thread-safe counters using Interlocked for atomic operations
+            var processedCount = 0;
+            var failedCount = 0;
+            var skippedCount = 0;
+            var lastCheckpointLine = new AtomicInt(startFromLine);
+
+            // Lines to process (skip already processed)
+            var linesToProcess = lines
+                .Select((line, index) => (Line: line, Index: index))
+                .Skip(startFromLine)
+                .ToArray();
+
+            if (linesToProcess.Length == 0)
             {
-                try
-                {
-                    await _fileUploadTrackingService.CommitLineHashesAsync(cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to commit line hashes to database");
-                    return Result<int>.Failure("An error occurred while recording duplicate detection data. Please try again.");
-                }
+                logger.LogInformation("No lines to process (all already processed). UploadId: {UploadId}", fileUploadId);
+                return Result<int>.Success(0);
             }
 
-            // Step 5: Add transactions to database with retry policy
-            var retryPolicy = ResiliencePolicies.GetDatabaseRetryPolicy(_logger);
-            var context = new Polly.Context { ["correlationId"] = CorrelationIdHelper.GetCorrelationId() };
+            // Use SemaphoreSlim to limit parallel workers
+            using var semaphore = new SemaphoreSlim(_options.ParallelWorkers);
 
-            Result<List<Transaction>>? addResult = null;
-            
-            // If all lines were duplicates, there are no transactions to add - that's OK
-            if (transactionsWithIdempotency.Count == 0)
+            // Process lines in parallel with controlled concurrency
+            var tasks = new List<Task>();
+            var processedLines = new ConcurrentBag<int>();
+
+            foreach (var (line, index) in linesToProcess)
             {
-                _logger.LogInformation(
-                    "All lines were duplicates. No new transactions to import. Total duplicates skipped: {DuplicateLineCount}",
-                    duplicateLineCount);
-                
-                return Result<int>.Success(transactionsWithIdempotency.Count);
-            }
-            
-            try
-            {
-                await retryPolicy.ExecuteAsync(async (ctx) =>
+                cancellationToken.ThrowIfCancellationRequested();
+
+                await semaphore.WaitAsync(cancellationToken);
+
+                var task = Task.Run(async () =>
                 {
-                    addResult = await _transactionService.AddTransactionsAsync(transactionsWithIdempotency, cancellationToken);
-                    
-                    if (addResult != null && !addResult.IsSuccess)
+                    // Create a new scope for this task to get its own DbContext and Unit of Work
+                    using var scope = serviceScopeFactory.CreateScope();
+                    var transactionService = scope.ServiceProvider.GetRequiredService<ITransactionService>();
+                    var fileUploadTrackingService = scope.ServiceProvider.GetRequiredService<IFileUploadTrackingService>();
+                    var parserService = scope.ServiceProvider.GetRequiredService<ICnabParserService>();
+                    var scopeHashService = scope.ServiceProvider.GetRequiredService<IHashService>();
+                    var unitOfWork = scope.ServiceProvider.GetRequiredService<Services.UnitOfWork.IUnitOfWork>();
+
+                    try
                     {
-                        throw new InvalidOperationException(addResult.ErrorMessage);
+                        // Delegate line processing to ILineProcessor (with Unit of Work for ACID compliance)
+                        var result = await lineProcessor.ProcessLineAsync(
+                            line,
+                            index,
+                            fileUploadId,
+                            fileHash,
+                            transactionService,
+                            fileUploadTrackingService,
+                            parserService,
+                            scopeHashService,
+                            unitOfWork,
+                            _options.MaxRetryPerLine,
+                            _options.RetryDelayMs,
+                            logger,
+                            cancellationToken);
+
+                        switch (result)
+                        {
+                            case LineProcessingResult.Success:
+                                Interlocked.Increment(ref processedCount);
+                                break;
+                            case LineProcessingResult.Skipped:
+                                Interlocked.Increment(ref skippedCount);
+                                break;
+                            case LineProcessingResult.Failed:
+                                Interlocked.Increment(ref failedCount);
+                                break;
+                        }
+
+                        processedLines.Add(index);
+
+                        // Delegate checkpoint logic to ICheckpointManager
+                        var currentProcessed = Interlocked.CompareExchange(ref processedCount, 0, 0) + 
+                                               Interlocked.CompareExchange(ref failedCount, 0, 0) + 
+                                               Interlocked.CompareExchange(ref skippedCount, 0, 0);
+                        
+                        if (checkpointManager.ShouldSaveCheckpoint(currentProcessed, _options.CheckpointInterval))
+                        {
+                            var maxProcessedLine = processedLines.DefaultIfEmpty(startFromLine).Max();
+                            var currentLastCheckpoint = lastCheckpointLine.Value;
+                            
+                            // Only update if we have a new maximum (atomic compare-and-swap)
+                            if (maxProcessedLine > currentLastCheckpoint && 
+                                lastCheckpointLine.CompareAndSwap(currentLastCheckpoint, maxProcessedLine))
+                            {
+                                // Fire and forget checkpoint save (non-blocking)
+                                _ = checkpointManager.SaveCheckpointAsync(
+                                    fileUploadId,
+                                    maxProcessedLine,
+                                    Interlocked.CompareExchange(ref processedCount, 0, 0),
+                                    Interlocked.CompareExchange(ref failedCount, 0, 0),
+                                    Interlocked.CompareExchange(ref skippedCount, 0, 0),
+                                    fileUploadTrackingService,
+                                    logger,
+                                    cancellationToken);
+                            }
+                        }
                     }
-                }, context);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogError("Database transaction storage failed after retries: {Error}", ex.Message);
-                return Result<int>.Failure(addResult?.ErrorMessage ?? "Database transaction storage failed after retries");
-            }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, cancellationToken);
 
-            if (addResult == null || !addResult.IsSuccess)
-            {
-                _logger.LogError("Database transaction storage failed: {Error}", addResult?.ErrorMessage);
-                return Result<int>.Failure(addResult?.ErrorMessage ?? "Database transaction storage failed");
+                tasks.Add(task);
             }
 
-            var transactionCount = addResult.Data!.Count;
-            _logger.LogInformation(
-                "Successfully imported {Count} transactions (skipped {SkippedCount} duplicates) with idempotency",
-                transactionCount,
-                duplicateLineCount);
-            
-            return Result<int>.Success(transactionCount);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error during CNAB file upload processing");
-            return Result<int>.Failure("An unexpected error occurred while processing the file.");
-        }
-    }
+            // Wait for all tasks to complete
+            await Task.WhenAll(tasks);
 
-    /// <summary>
-    /// Validates transactions for duplicate lines and builds them with idempotency keys.
-    /// Skips duplicate lines if fileUploadId is provided, otherwise processes all lines.
-    /// </summary>
-    /// <param name="transactions">Parsed transactions from the CNAB file</param>
-    /// <param name="fileContent">Original file content for line extraction</param>
-    /// <param name="fileHash">Computed file hash for idempotency key generation</param>
-    /// <param name="fileUploadId">FileUpload ID for line duplicate detection (optional)</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Tuple containing processed transactions and count of duplicate lines skipped</returns>
-    private async Task<(List<Transaction>, int)> ValidateAndBuildTransactionsWithIdempotencyAsync(
-        List<Transaction> transactions,
-        string fileContent,
-        string fileHash,
-        Guid fileUploadId,
-        CancellationToken cancellationToken)
-    {
-        var lines = fileContent.Split(["\r\n", "\r", "\n"], StringSplitOptions.None);
-        var transactionsWithIdempotency = new List<Transaction>();
-        var duplicateLineCount = 0;
-
-        for (int index = 0; index < transactions.Count; index++)
-        {
-            var transaction = transactions[index];
-            var lineContent = index < lines.Length ? lines[index] : string.Empty;
-
-            // Check for duplicate lines if fileUploadId is provided
-            if (fileUploadId != default)
+            // Final checkpoint - create a scope for this final update
+            using (var finalScope = serviceScopeFactory.CreateScope())
             {
-                var lineHash = await _fileUploadTrackingService.CalculateFileHashAsync(
-                    new MemoryStream(Encoding.UTF8.GetBytes(lineContent)));
-                
-                var isLineUnique = await _fileUploadTrackingService.IsLineUniqueAsync(lineHash, cancellationToken);
-                
-                if (!isLineUnique)
-                {
-                    _logger.LogWarning(
-                        "Duplicate line detected and skipped. FileUploadId: {FileUploadId}, LineIndex: {LineIndex}",
-                        fileUploadId,
-                        index);
-                    duplicateLineCount++;
-                    continue;
-                }
-
-                // Record the line hash for future duplicate detection
-                await _fileUploadTrackingService.RecordLineHashAsync(
+                var finalFileUploadTrackingService = finalScope.ServiceProvider.GetRequiredService<IFileUploadTrackingService>();
+                var finalMaxLine = processedLines.DefaultIfEmpty(startFromLine).Max();
+                await finalFileUploadTrackingService.UpdateProcessingResultAsync(
                     fileUploadId,
-                    lineHash,
-                    lineContent,
+                    processedCount,
+                    failedCount,
+                    skippedCount,
                     cancellationToken);
             }
 
-            // Add idempotency key to transaction
-            transaction.IdempotencyKey = GenerateIdempotencyKey(fileHash, index);
-            transactionsWithIdempotency.Add(transaction);
-        }
+            logger.LogInformation(
+                "Processing completed. UploadId: {UploadId}, Processed: {Processed}, Failed: {Failed}, Skipped: {Skipped}",
+                fileUploadId, processedCount, failedCount, skippedCount);
 
-        // Log skipped duplicate lines
-        if (duplicateLineCount > 0)
+            // If no lines were processed successfully and there were failures, consider it a validation failure
+            if (processedCount == 0 && failedCount > 0)
+            {
+                logger.LogWarning(
+                    "Upload validation failed. UploadId: {UploadId}, All {Failed} lines failed validation",
+                    fileUploadId, failedCount);
+                
+                return Result<int>.Failure($"Invalid CNAB file format - all {failedCount} lines failed validation (expected 80 characters per line)");
+            }
+
+            return Result<int>.Success(processedCount);
+        }
+        catch (OperationCanceledException)
         {
-            _logger.LogInformation(
-                "Skipped {DuplicateLineCount} duplicate lines during processing. FileUploadId: {FileUploadId}",
-                duplicateLineCount,
-                fileUploadId);
+            logger.LogInformation("Processing cancelled. UploadId: {UploadId}", fileUploadId);
+            throw;
         }
-
-        return (transactionsWithIdempotency, duplicateLineCount);
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unexpected error during processing. UploadId: {UploadId}", fileUploadId);
+            return Result<int>.Failure($"Processing failed: {ex.Message}");
+        }
     }
 
     /// <summary>
-    /// Generates a unique idempotency key for a transaction line.
-    /// Prevents duplicate processing in case of retries.
+    /// Thread-safe atomic integer wrapper for checkpoint line tracking.
+    /// Simplifies checkpoint logic (KISS principle).
     /// </summary>
-    private static string GenerateIdempotencyKey(string fileHash, int lineIndex)
+    private class AtomicInt
     {
-        return $"{fileHash}:{lineIndex}";
-    }
+        private int _value;
 
-    private static string ComputeFileHash(string content)
-    {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(content));
-        return Convert.ToBase64String(hash);
+        public AtomicInt(int initialValue)
+        {
+            _value = initialValue;
+        }
+
+        public int Value => Interlocked.CompareExchange(ref _value, 0, 0);
+
+        public bool CompareAndSwap(int expected, int newValue)
+        {
+            return Interlocked.CompareExchange(ref _value, newValue, expected) == expected;
+        }
     }
 }

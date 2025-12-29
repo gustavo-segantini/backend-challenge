@@ -3,6 +3,7 @@ import './App.css';
 import UploadForm from './components/UploadForm';
 import TransactionList from './components/TransactionList';
 import LoginForm from './components/LoginForm';
+import AdminPanel from './components/AdminPanel';
 import Spinner from './components/Spinner';
 import Toast from './components/Toast';
 import api, { setAuthToken, getStoredToken } from './services/api';
@@ -22,8 +23,10 @@ function App() {
   const [authError, setAuthError] = useState(null);
   const [token, setToken] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
+  const [currentView, setCurrentView] = useState('main'); // 'main' or 'admin'
 
   const isAuthenticated = Boolean(token);
+  const isAdmin = userInfo?.role === 'Admin';
 
   useEffect(() => {
     const existing = getStoredToken();
@@ -136,31 +139,29 @@ function App() {
     loadTransactions(cpf, newPage);
   };
 
-  const handleClear = async () => {
-    if (!isAuthenticated) {
-      setError('Please log in to clear data.');
-      return;
-    }
-    if (window.confirm('Are you sure you want to delete all data?')) {
-      try {
-        await api.delete('/transactions');
-        setMessage('All data cleared successfully');
-        setTimeout(() => setMessage(null), 5000);
-        setTransactions([]);
-        setBalance(null);
-        setSearched(false);
-        setCpf('');
-      } catch (err) {
-        setError(err.response?.data?.error || 'Failed to clear data');
-      }
-    }
-  };
-
   return (
     <div className="App">
       <header className="header">
         <h1>Transaction Manager</h1>
         <p>Upload and manage financial transactions</p>
+        {isAuthenticated && (
+          <nav className="main-nav">
+            <button
+              className={`nav-btn ${currentView === 'main' ? 'active' : ''}`}
+              onClick={() => setCurrentView('main')}
+            >
+              Main
+            </button>
+            {isAdmin && (
+              <button
+                className={`nav-btn ${currentView === 'admin' ? 'active' : ''}`}
+                onClick={() => setCurrentView('admin')}
+              >
+                Administration
+              </button>
+            )}
+          </nav>
+        )}
       </header>
 
       <main className="container">
@@ -216,13 +217,12 @@ function App() {
               <h2>Authentication Required</h2>
               <p>Please log in to upload files and search transactions.</p>
             </div>
+          ) : currentView === 'admin' && isAdmin ? (
+            <AdminPanel userInfo={userInfo} />
           ) : (
             <>
               <section className="upload-section">
                 <UploadForm onUpload={handleUpload} isAuthenticated={isAuthenticated} />
-                <button className="btn btn-danger" onClick={handleClear}>
-                  Clear All Data
-                </button>
               </section>
 
               <section className="search-section">

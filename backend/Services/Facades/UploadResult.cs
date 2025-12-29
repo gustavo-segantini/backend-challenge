@@ -7,4 +7,5 @@ public class UploadResult
 {
     public int TransactionCount { get; set; }
     public UploadStatusCode StatusCode { get; set; }
+    public Guid? UploadId { get; set; }
 }

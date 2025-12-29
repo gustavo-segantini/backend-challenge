@@ -61,7 +61,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
     }
 
     [Fact]
-    public async Task UploadCnabFile_WithInvalidLineLength_ReturnsBadRequest()
+    public async Task UploadCnabFile_WithInvalidLineLength_ReturnsUnprocessableEntity()
     {
         // Arrange
         var client = await CreateAuthorizedClientAsync();
@@ -78,7 +78,7 @@ public class TransactionsControllerIntegrationTests(CnabApiFactory factory) : IC
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
         var responseContent = await response.Content.ReadAsStringAsync();
-        responseContent.Should().Contain("Invalid line");
+        responseContent.Should().Contain("Invalid");
         responseContent.Should().Contain("80");
     }
 

@@ -4,6 +4,7 @@ using CnabApi.Common;
 using CnabApi.Data;
 using CnabApi.Models;
 using System.Diagnostics.CodeAnalysis;
+using Npgsql;
 
 namespace CnabApi.Services;
 
@@ -21,6 +22,7 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
 
     /// <summary>
     /// Adds transactions to the database and updates store balances.
+    /// Handles duplicate IdempotencyKey violations gracefully by filtering out duplicates.
     /// </summary>
     public async Task<Result<List<Transaction>>> AddTransactionsAsync(List<Transaction> transactions, CancellationToken cancellationToken = default)
     {
@@ -29,23 +31,190 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
             if (transactions == null || transactions.Count == 0)
                 return Result<List<Transaction>>.Failure("No transactions were provided.");
 
-            _context.Transactions.AddRange(transactions);
-            
-            await _context.SaveChangesAsync(cancellationToken);
+            // Filter out transactions that already exist (based on IdempotencyKey)
+            var idempotencyKeys = transactions.Select(t => t.IdempotencyKey).ToList();
+            var existingKeys = await _context.Transactions
+                .Where(t => idempotencyKeys.Contains(t.IdempotencyKey))
+                .Select(t => t.IdempotencyKey)
+                .ToListAsync(cancellationToken);
+
+            var existingKeysSet = existingKeys.ToHashSet();
+            var newTransactions = transactions
+                .Where(t => !existingKeysSet.Contains(t.IdempotencyKey))
+                .ToList();
+
+            if (newTransactions.Count == 0)
+            {
+                // All transactions are duplicates - this is OK, just return empty list
+                return Result<List<Transaction>>.Success([]);
+            }
+
+            // Try bulk insert first
+            try
+            {
+                _context.Transactions.AddRange(newTransactions);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException dbEx) when (IsUniqueViolation(dbEx))
+            {
+                // Handle case where duplicates were inserted between check and save
+                // Fall back to individual inserts with duplicate handling
+                _context.ChangeTracker.Clear();
+                return await AddTransactionsIndividuallyAsync(newTransactions, cancellationToken);
+            }
 
             // Invalidate cache for all affected CPFs
-            var cpfs = transactions.Select(t => t.Cpf).Distinct();
+            var cpfs = newTransactions.Select(t => t.Cpf).Distinct();
             foreach (var cpf in cpfs)
             {
                 await InvalidateCacheAsync(cpf, cancellationToken);
             }
 
-            return Result<List<Transaction>>.Success(transactions);
+            return Result<List<Transaction>>.Success(newTransactions);
         }
         catch (Exception ex)
         {
             return Result<List<Transaction>>.Failure($"Error adding transactions: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Adds a single transaction atomically with immediate commit.
+    /// Handles duplicate IdempotencyKey gracefully.
+    /// </summary>
+    public async Task<Result<Transaction>> AddSingleTransactionAsync(Transaction transaction, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (transaction == null)
+                return Result<Transaction>.Failure("Transaction cannot be null.");
+
+            // Check if it already exists
+            var exists = await _context.Transactions
+                .AnyAsync(t => t.IdempotencyKey == transaction.IdempotencyKey, cancellationToken);
+
+            if (exists)
+            {
+                return Result<Transaction>.Failure("Transaction already exists (duplicate IdempotencyKey).");
+            }
+
+            _context.Transactions.Add(transaction);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            // Invalidate cache for the CPF
+            await InvalidateCacheAsync(transaction.Cpf, cancellationToken);
+
+            return Result<Transaction>.Success(transaction);
+        }
+        catch (DbUpdateException dbEx) when (IsUniqueViolation(dbEx))
+        {
+            _context.ChangeTracker.Clear();
+            return Result<Transaction>.Failure("Transaction already exists (unique constraint violation).");
+        }
+        catch (Exception ex)
+        {
+            _context.ChangeTracker.Clear();
+            return Result<Transaction>.Failure($"Error adding transaction: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Adds a single transaction to the context without saving (for use with Unit of Work).
+    /// Validates duplicate but does not commit or invalidate cache.
+    /// </summary>
+    public async Task<Result<Transaction>> AddTransactionToContextAsync(Transaction transaction, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (transaction == null)
+                return Result<Transaction>.Failure("Transaction cannot be null.");
+
+            // Check if it already exists
+            var exists = await _context.Transactions
+                .AnyAsync(t => t.IdempotencyKey == transaction.IdempotencyKey, cancellationToken);
+
+            if (exists)
+            {
+                return Result<Transaction>.Failure("Transaction already exists (duplicate IdempotencyKey).");
+            }
+
+            _context.Transactions.Add(transaction);
+            // Do NOT call SaveChangesAsync - Unit of Work will handle it
+
+            return Result<Transaction>.Success(transaction);
+        }
+        catch (Exception ex)
+        {
+            return Result<Transaction>.Failure($"Error adding transaction to context: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Adds transactions individually, skipping duplicates.
+    /// Used as fallback when bulk insert fails due to concurrent duplicate inserts.
+    /// </summary>
+    private async Task<Result<List<Transaction>>> AddTransactionsIndividuallyAsync(
+        List<Transaction> transactions,
+        CancellationToken cancellationToken)
+    {
+        var successfullyAdded = new List<Transaction>();
+        
+        foreach (var transaction in transactions)
+        {
+            try
+            {
+                // Check if it exists (double-check)
+                var exists = await _context.Transactions
+                    .AnyAsync(t => t.IdempotencyKey == transaction.IdempotencyKey, cancellationToken);
+                
+                if (exists)
+                {
+                    continue; // Skip duplicate
+                }
+
+                _context.Transactions.Add(transaction);
+                await _context.SaveChangesAsync(cancellationToken);
+                successfullyAdded.Add(transaction);
+                
+                // Clear tracking to avoid issues with next transaction
+                _context.ChangeTracker.Clear();
+            }
+            catch (DbUpdateException dbEx) when (IsUniqueViolation(dbEx))
+            {
+                // Another concurrent insert got there first - skip this one
+                _context.ChangeTracker.Clear();
+                continue;
+            }
+            catch (Exception)
+            {
+                // Log error but continue with other transactions
+                _context.ChangeTracker.Clear();
+                // In production, you might want to log this to a dead letter queue
+                continue;
+            }
+        }
+
+        // Invalidate cache for all affected CPFs
+        var cpfs = successfullyAdded.Select(t => t.Cpf).Distinct();
+        foreach (var cpf in cpfs)
+        {
+            await InvalidateCacheAsync(cpf, cancellationToken);
+        }
+
+        return Result<List<Transaction>>.Success(successfullyAdded);
+    }
+
+    /// <summary>
+    /// Checks if the exception is a PostgreSQL unique violation (23505).
+    /// </summary>
+    private static bool IsUniqueViolation(DbUpdateException ex)
+    {
+        if (ex.InnerException is PostgresException pgEx)
+        {
+            // PostgreSQL unique violation error code
+            return pgEx.SqlState == "23505";
+        }
+        return false;
     }
 
     /// <summary>
@@ -244,6 +413,14 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
             : query.OrderByDescending(t => t.TransactionDate).ThenByDescending(t => t.TransactionTime);
 
         return query;
+    }
+
+    /// <summary>
+    /// Invalidates cache for a specific CPF.
+    /// </summary>
+    public async Task InvalidateCacheForCpfAsync(string cpf, CancellationToken cancellationToken = default)
+    {
+        await InvalidateCacheAsync(cpf, cancellationToken);
     }
 
     /// <summary>

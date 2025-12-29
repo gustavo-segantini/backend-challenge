@@ -5,6 +5,7 @@ using CnabApi.Services.Facades;
 using CnabApi.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System.Text;
@@ -16,29 +17,46 @@ namespace CnabApi.Tests.Services.Facades;
 /// </summary>
 public class TransactionFacadeServiceTests
 {
-    private readonly Mock<ICnabUploadService> _uploadServiceMock;
     private readonly Mock<ITransactionService> _transactionServiceMock;
     private readonly Mock<IFileUploadService> _fileUploadServiceMock;
     private readonly Mock<IFileUploadTrackingService> _fileUploadTrackingServiceMock;
     private readonly Mock<IObjectStorageService> _objectStorageServiceMock;
+    private readonly Mock<IUploadQueueService> _uploadQueueServiceMock;
+    private readonly Mock<ICnabUploadService> _cnabUploadServiceMock;
+    private readonly Mock<IHostEnvironment> _hostEnvironmentMock;
+    private readonly Mock<IHashService> _hashServiceMock;
+    private readonly CnabApi.Services.StatusCodes.UploadStatusCodeStrategyFactory _statusCodeFactory;
     private readonly Mock<ILogger<TransactionFacadeService>> _loggerMock;
     private readonly TransactionFacadeService _service;
 
     public TransactionFacadeServiceTests()
     {
-        _uploadServiceMock = new Mock<ICnabUploadService>();
         _transactionServiceMock = new Mock<ITransactionService>();
         _fileUploadServiceMock = new Mock<IFileUploadService>();
         _fileUploadTrackingServiceMock = new Mock<IFileUploadTrackingService>();
         _objectStorageServiceMock = new Mock<IObjectStorageService>();
+        _uploadQueueServiceMock = new Mock<IUploadQueueService>();
+        _cnabUploadServiceMock = new Mock<ICnabUploadService>();
+        _hostEnvironmentMock = new Mock<IHostEnvironment>();
+        _hashServiceMock = new Mock<IHashService>();
+        _statusCodeFactory = new CnabApi.Services.StatusCodes.UploadStatusCodeStrategyFactory();
         _loggerMock = new Mock<ILogger<TransactionFacadeService>>();
 
+        // Setup hash service to return a mock hash
+        _hashServiceMock
+            .Setup(x => x.ComputeFileHash(It.IsAny<string>()))
+            .Returns((string content) => $"hash-{content.GetHashCode()}");
+
         _service = new TransactionFacadeService(
-            _uploadServiceMock.Object,
             _transactionServiceMock.Object,
             _fileUploadServiceMock.Object,
             _fileUploadTrackingServiceMock.Object,
             _objectStorageServiceMock.Object,
+            _uploadQueueServiceMock.Object,
+            _cnabUploadServiceMock.Object,
+            _hashServiceMock.Object,
+            _statusCodeFactory,
+            _hostEnvironmentMock.Object,
             _loggerMock.Object
         );
     }
@@ -51,7 +69,6 @@ public class TransactionFacadeServiceTests
         // Arrange
         var request = CreateMockHttpRequest();
         var fileContent = "Sample CNAB content";
-        var transactionCount = 10;
         var fileUploadId = Guid.NewGuid();
         var fileHash = "abc123hash";
 
@@ -67,6 +84,11 @@ public class TransactionFacadeServiceTests
             .Setup(x => x.IsFileUniqueAsync(fileHash, It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, null));
 
+        var storagePath = "cnab-20250101-120000-123.txt";
+        _objectStorageServiceMock
+            .Setup(x => x.UploadFileAsync(It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync($"http://minio/{storagePath}");
+
         var fileUpload = new FileUpload 
         { 
             Id = fileUploadId, 
@@ -74,16 +96,17 @@ public class TransactionFacadeServiceTests
             FileHash = fileHash,
             FileSize = 100,
             Status = FileUploadStatus.Pending,
-            UploadedAt = DateTime.UtcNow
+            UploadedAt = DateTime.UtcNow,
+            StoragePath = storagePath
         };
 
         _fileUploadTrackingServiceMock
-            .Setup(x => x.RecordSuccessfulUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.RecordPendingUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(fileUpload);
 
-        _uploadServiceMock
-            .Setup(x => x.ProcessCnabUploadAsync(fileContent, fileUploadId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<int>.Success(transactionCount));
+        _uploadQueueServiceMock
+            .Setup(x => x.EnqueueUploadAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("message-id-123");
 
         // Act
         var result = await _service.UploadCnabFileAsync(request, CancellationToken.None);
@@ -91,8 +114,8 @@ public class TransactionFacadeServiceTests
         // Assert
         result.IsSuccess.Should().BeTrue();
         result.Data.Should().NotBeNull();
-        result.Data!.TransactionCount.Should().Be(transactionCount);
-        result.Data.StatusCode.Should().Be(UploadStatusCode.Success);
+        result.Data!.TransactionCount.Should().Be(0); // Returns 0 when queued
+        result.Data.StatusCode.Should().Be(UploadStatusCode.Accepted);
     }
 
     [Fact]
@@ -149,6 +172,11 @@ public class TransactionFacadeServiceTests
             .Setup(x => x.IsFileUniqueAsync(fileHash, It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, null));
 
+        var storagePath = "cnab-20250101-120000-456.txt";
+        _objectStorageServiceMock
+            .Setup(x => x.UploadFileAsync(It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync($"http://minio/{storagePath}");
+
         var fileUpload = new FileUpload 
         { 
             Id = fileUploadId, 
@@ -156,26 +184,26 @@ public class TransactionFacadeServiceTests
             FileHash = fileHash,
             FileSize = 100,
             Status = FileUploadStatus.Pending,
-            UploadedAt = DateTime.UtcNow
+            UploadedAt = DateTime.UtcNow,
+            StoragePath = storagePath
         };
 
         _fileUploadTrackingServiceMock
-            .Setup(x => x.RecordSuccessfulUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.RecordPendingUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(fileUpload);
 
-        _uploadServiceMock
-            .Setup(x => x.ProcessCnabUploadAsync(fileContent, fileUploadId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<int>.Failure("Invalid CNAB format"));
+        _uploadQueueServiceMock
+            .Setup(x => x.EnqueueUploadAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("message-id-456");
 
         // Act
         var result = await _service.UploadCnabFileAsync(request, CancellationToken.None);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("Invalid CNAB format");
+        result.IsSuccess.Should().BeTrue();
         result.Data.Should().NotBeNull();
-        result.Data!.TransactionCount.Should().Be(0);
-        result.Data.StatusCode.Should().Be(UploadStatusCode.UnprocessableEntity);
+        result.Data!.TransactionCount.Should().Be(0); // Returns 0 when queued (processing is async)
+        result.Data.StatusCode.Should().Be(UploadStatusCode.Accepted);
     }
 
     [Fact]

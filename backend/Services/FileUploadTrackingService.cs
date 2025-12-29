@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using CnabApi.Data;
 using CnabApi.Models;
@@ -8,11 +7,15 @@ namespace CnabApi.Services;
 
 /// <summary>
 /// Service for tracking file uploads and detecting duplicate uploads.
-/// Uses SHA256 hashing for duplicate detection.
+/// Uses SHA256 hashing for duplicate detection via IHashService (DRY principle).
 /// </summary>
-public class FileUploadTrackingService(CnabDbContext db, ILogger<FileUploadTrackingService> logger) : IFileUploadTrackingService
+public class FileUploadTrackingService(
+    CnabDbContext db,
+    IHashService hashService,
+    ILogger<FileUploadTrackingService> logger) : IFileUploadTrackingService
 {
     private readonly CnabDbContext _db = db;
+    private readonly IHashService _hashService = hashService;
     private readonly ILogger<FileUploadTrackingService> _logger = logger;
 
     public async Task<(bool IsUnique, FileUpload? ExistingUpload)> IsFileUniqueAsync(string fileHash, CancellationToken cancellationToken = default)
@@ -103,22 +106,7 @@ public class FileUploadTrackingService(CnabDbContext db, ILogger<FileUploadTrack
 
     public async Task<string> CalculateFileHashAsync(Stream stream)
     {
-        if (stream == null)
-            throw new ArgumentNullException(nameof(stream));
-
-        // Ensure we're at the beginning of the stream
-        if (stream.CanSeek)
-            stream.Seek(0, SeekOrigin.Begin);
-
-        using var sha256 = SHA256.Create();
-        var hashBytes = await Task.Run(() => sha256.ComputeHash(stream));
-
-        // Reset stream position for further reading
-        if (stream.CanSeek)
-            stream.Seek(0, SeekOrigin.Begin);
-
-        // Convert hash bytes to hexadecimal string
-        return Convert.ToHexStringLower(hashBytes);
+        return await _hashService.ComputeStreamHashAsync(stream);
     }
 
     public async Task<bool> IsLineUniqueAsync(string lineHash, CancellationToken cancellationToken = default)
@@ -143,7 +131,34 @@ public class FileUploadTrackingService(CnabDbContext db, ILogger<FileUploadTrack
     }
 
     public async Task RecordLineHashAsync(Guid fileUploadId, string lineHash, string lineContent, CancellationToken cancellationToken = default)
-    {
+    {        
+        // First check pending entries in the ChangeTracker to avoid duplicate adds within the same DbContext
+        var pendingExists = _db.ChangeTracker.Entries<FileUploadLineHash>()
+            .Any(e => e.State == EntityState.Added && ((FileUploadLineHash)e.Entity).LineHash == lineHash);
+
+        if (pendingExists)
+        {
+            _logger.LogDebug(
+                "Line hash already exists. FileUploadId: {FileUploadId}, LineHash: {LineHash}",
+                fileUploadId,
+                lineHash);
+            return;
+        }
+
+        // If not pending, check persisted DB state as well
+        var exists = await _db.FileUploadLineHashes
+            .AsNoTracking()
+            .AnyAsync(lh => lh.LineHash == lineHash, cancellationToken);
+
+        if (exists)
+        {
+            _logger.LogDebug(
+                "Line hash already exists in database. FileUploadId: {FileUploadId}, LineHash: {LineHash}",
+                fileUploadId,
+                lineHash);
+            return;
+        }
+
         var lineHashRecord = new FileUploadLineHash
         {
             Id = Guid.NewGuid(),
@@ -169,23 +184,255 @@ public class FileUploadTrackingService(CnabDbContext db, ILogger<FileUploadTrack
     /// <returns>Task representing the asynchronous save operation</returns>
     public async Task CommitLineHashesAsync(CancellationToken cancellationToken = default)
     {
+        // Commit pending FileUploadLineHash entries using an idempotent DB insert
+        // to avoid unique constraint violations caused by concurrent processing.
+        var pendingEntries = _db.ChangeTracker.Entries<FileUploadLineHash>()
+            .Where(e => e.State == EntityState.Added)
+            .Select(e => e.Entity)
+            .ToList();
+
+        if (!pendingEntries.Any())
+            return;
+
         try
         {
-            var changeCount = _db.ChangeTracker.Entries().Count(e => e.State == EntityState.Added);
-            
-            if (changeCount > 0)
+            var inserted = 0;
+
+            // Use parameterized interpolated SQL to leverage ON CONFLICT DO NOTHING
+            foreach (var entry in pendingEntries)
             {
-                await _db.SaveChangesAsync(cancellationToken);
-                
-                _logger.LogInformation(
-                    "Committed {ChangeCount} line hash records to database",
-                    changeCount);
+                // ExecuteSqlInterpolatedAsync will parameterize the values
+                var result = await _db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"FileUploadLineHashes\" (\"Id\", \"FileUploadId\", \"LineContent\", \"LineHash\", \"ProcessedAt\") VALUES ({entry.Id}, {entry.FileUploadId}, {entry.LineContent}, {entry.LineHash}, {entry.ProcessedAt}) ON CONFLICT (\"LineHash\") DO NOTHING", cancellationToken);
+                // result is number of rows affected for this statement (0 or 1)
+                if (result > 0) inserted += result;
+
+                // Detach the tracked entity so SaveChanges won't try to insert it again
+                var tracked = _db.ChangeTracker.Entries<FileUploadLineHash>()
+                    .FirstOrDefault(e => e.State == EntityState.Added && e.Entity.Id == entry.Id);
+                if (tracked != null)
+                    tracked.State = EntityState.Detached;
             }
+
+            _logger.LogInformation("Committed {Inserted} line hash records to database (ON CONFLICT DO NOTHING)", inserted);
         }
-        catch (DbUpdateException ex)
+        catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to commit line hash records. Database error: {Error}", ex.InnerException?.Message);
+            _logger.LogError(ex, "Failed to commit line hash records. Database error: {Error}", ex.Message);
             throw;
         }
+    }
+
+    public async Task<FileUpload> RecordPendingUploadAsync(
+        string fileName,
+        string fileHash,
+        long fileSize,
+        string storagePath,
+        CancellationToken cancellationToken = default)
+    {
+        var fileUpload = new FileUpload
+        {
+            Id = Guid.NewGuid(),
+            FileName = fileName,
+            FileHash = fileHash,
+            FileSize = fileSize,
+            ProcessedLineCount = 0,
+            Status = FileUploadStatus.Pending,
+            UploadedAt = DateTime.UtcNow,
+            RetryCount = 0,
+            StoragePath = storagePath
+        };
+
+        _db.FileUploads.Add(fileUpload);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "File upload recorded as pending. Id: {UploadId}, File: {FileName}, Hash: {FileHash}, StoragePath: {StoragePath}",
+            fileUpload.Id,
+            fileName,
+            fileHash,
+            storagePath);
+
+        return fileUpload;
+    }
+
+    public async Task UpdateProcessingStatusAsync(
+        Guid uploadId,
+        FileUploadStatus status,
+        int retryCount,
+        CancellationToken cancellationToken = default)
+    {
+        var fileUpload = await _db.FileUploads.FindAsync(new object[] { uploadId }, cancellationToken: cancellationToken);
+        
+        if (fileUpload == null)
+        {
+            _logger.LogWarning("FileUpload not found for status update. UploadId: {UploadId}", uploadId);
+            return;
+        }
+
+        fileUpload.Status = status;
+        fileUpload.RetryCount = retryCount;
+        
+        if (status == FileUploadStatus.Processing && fileUpload.ProcessingStartedAt == null)
+        {
+            fileUpload.ProcessingStartedAt = DateTime.UtcNow;
+        }
+
+        _db.FileUploads.Update(fileUpload);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "File upload status updated. UploadId: {UploadId}, Status: {Status}, RetryCount: {RetryCount}",
+            uploadId, status, retryCount);
+    }
+
+    public async Task UpdateProcessingSuccessAsync(
+        Guid uploadId,
+        int processedLineCount,
+        string? storagePath,
+        CancellationToken cancellationToken = default)
+    {
+        var fileUpload = await _db.FileUploads.FindAsync(new object[] { uploadId }, cancellationToken: cancellationToken);
+        
+        if (fileUpload == null)
+        {
+            _logger.LogWarning("FileUpload not found for success update. UploadId: {UploadId}", uploadId);
+            return;
+        }
+
+        fileUpload.Status = FileUploadStatus.Success;
+        fileUpload.ProcessedLineCount = processedLineCount;
+        fileUpload.StoragePath = storagePath;
+        fileUpload.ProcessingCompletedAt = DateTime.UtcNow;
+        fileUpload.RetryCount = 0; // Reset retry count on success
+        fileUpload.ErrorMessage = null; // Clear error message
+
+        _db.FileUploads.Update(fileUpload);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "File upload completed successfully. UploadId: {UploadId}, ProcessedLines: {ProcessedLineCount}, StoragePath: {StoragePath}",
+            uploadId, processedLineCount, storagePath);
+    }
+
+    public async Task UpdateProcessingFailureAsync(
+        Guid uploadId,
+        string errorMessage,
+        int retryCount,
+        CancellationToken cancellationToken = default)
+    {
+        var fileUpload = await _db.FileUploads.FindAsync(new object[] { uploadId }, cancellationToken: cancellationToken);
+        
+        if (fileUpload == null)
+        {
+            _logger.LogWarning("FileUpload not found for failure update. UploadId: {UploadId}", uploadId);
+            return;
+        }
+
+        fileUpload.Status = FileUploadStatus.Failed;
+        fileUpload.ErrorMessage = errorMessage;
+        fileUpload.RetryCount = retryCount;
+        fileUpload.ProcessingCompletedAt = DateTime.UtcNow;
+
+        _db.FileUploads.Update(fileUpload);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogWarning(
+            "File upload processing failed. UploadId: {UploadId}, Error: {ErrorMessage}, RetryCount: {RetryCount}",
+            uploadId, errorMessage, retryCount);
+    }
+
+    public async Task<FileUpload?> GetUploadByIdAsync(Guid uploadId, CancellationToken cancellationToken = default)
+    {
+        return await _db.FileUploads
+            .Include(fu => fu.LineHashes)
+            .FirstOrDefaultAsync(fu => fu.Id == uploadId, cancellationToken);
+    }
+
+    public async Task UpdateCheckpointAsync(
+        Guid uploadId,
+        int lastCheckpointLine,
+        int processedCount,
+        int failedCount,
+        int skippedCount,
+        CancellationToken cancellationToken = default)
+    {
+        var fileUpload = await _db.FileUploads.FindAsync(new object[] { uploadId }, cancellationToken: cancellationToken);
+        
+        if (fileUpload == null)
+        {
+            _logger.LogWarning("FileUpload not found for checkpoint update. UploadId: {UploadId}", uploadId);
+            return;
+        }
+
+        fileUpload.LastCheckpointLine = lastCheckpointLine;
+        fileUpload.LastCheckpointAt = DateTime.UtcNow;
+        fileUpload.ProcessedLineCount = processedCount;
+        fileUpload.FailedLineCount = failedCount;
+        fileUpload.SkippedLineCount = skippedCount;
+
+        _db.FileUploads.Update(fileUpload);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogDebug(
+            "Checkpoint updated. UploadId: {UploadId}, LastLine: {LastLine}, Processed: {Processed}, Failed: {Failed}, Skipped: {Skipped}",
+            uploadId, lastCheckpointLine, processedCount, failedCount, skippedCount);
+    }
+
+    public async Task SetTotalLineCountAsync(Guid uploadId, int totalLineCount, CancellationToken cancellationToken = default)
+    {
+        var fileUpload = await _db.FileUploads.FindAsync(new object[] { uploadId }, cancellationToken: cancellationToken);
+        
+        if (fileUpload == null)
+        {
+            _logger.LogWarning("FileUpload not found for total line count update. UploadId: {UploadId}", uploadId);
+            return;
+        }
+
+        fileUpload.TotalLineCount = totalLineCount;
+
+        _db.FileUploads.Update(fileUpload);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Total line count set. UploadId: {UploadId}, TotalLineCount: {TotalLineCount}",
+            uploadId, totalLineCount);
+    }
+
+    public async Task UpdateProcessingResultAsync(
+        Guid uploadId,
+        int processedCount,
+        int failedCount,
+        int skippedCount,
+        CancellationToken cancellationToken = default)
+    {
+        var fileUpload = await _db.FileUploads.FindAsync(new object[] { uploadId }, cancellationToken: cancellationToken);
+        
+        if (fileUpload == null)
+        {
+            _logger.LogWarning("FileUpload not found for result update. UploadId: {UploadId}", uploadId);
+            return;
+        }
+
+        fileUpload.ProcessedLineCount = processedCount;
+        fileUpload.FailedLineCount = failedCount;
+        fileUpload.SkippedLineCount = skippedCount;
+        fileUpload.ProcessingCompletedAt = DateTime.UtcNow;
+
+        // Determine final status
+        if (failedCount > 0)
+        {
+            fileUpload.Status = FileUploadStatus.PartiallyCompleted;
+        }
+        else
+        {
+            fileUpload.Status = FileUploadStatus.Success;
+        }
+
+        _db.FileUploads.Update(fileUpload);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Processing result updated. UploadId: {UploadId}, Status: {Status}, Processed: {Processed}, Failed: {Failed}, Skipped: {Skipped}",
+            uploadId, fileUpload.Status, processedCount, failedCount, skippedCount);
     }
 }

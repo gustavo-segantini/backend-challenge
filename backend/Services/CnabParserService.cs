@@ -52,6 +52,31 @@ public class CnabParserService : ICnabParserService
         }
     }
 
+    /// <summary>
+    /// Parses a single CNAB line and extracts transaction data.
+    /// </summary>
+    public Result<Transaction> ParseCnabLine(string line, int lineIndex)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                return Result<Transaction>.Failure($"Line {lineIndex}: Empty line");
+
+            if (line.Length < 80)
+                return Result<Transaction>.Failure($"Line {lineIndex}: Invalid length (expected 80, got {line.Length})");
+
+            var transaction = ParseTransaction(line);
+            if (transaction == null)
+                return Result<Transaction>.Failure($"Line {lineIndex}: Failed to parse transaction data");
+
+            return Result<Transaction>.Success(transaction);
+        }
+        catch (Exception ex)
+        {
+            return Result<Transaction>.Failure($"Line {lineIndex}: {ex.Message}");
+        }
+    }
+
     private Transaction? ParseTransaction(string line)
     {
         try

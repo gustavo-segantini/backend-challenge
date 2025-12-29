@@ -92,6 +92,26 @@ public class TransactionsController(
             };
         }
 
+        // Return 202 Accepted for background processing
+        if (result.Data?.StatusCode == UploadStatusCode.Accepted)
+        {
+            return Accepted(new
+            {
+                message = "File accepted and queued for background processing",
+                status = "processing"
+            });
+        }
+
+        // Return 200 OK for synchronous processing (e.g., tests)
+        if (result.Data?.StatusCode == UploadStatusCode.Success)
+        {
+            return Ok(new
+            {
+                message = $"Successfully imported {result.Data.TransactionCount} transactions",
+                count = result.Data.TransactionCount
+            });
+        }
+
         return Ok(new
         {
             message = $"Successfully imported {result.Data!.TransactionCount} transactions",

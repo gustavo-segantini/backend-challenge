@@ -3,6 +3,7 @@ using System;
 using CnabApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CnabApi.Data.Migrations
 {
     [DbContext(typeof(CnabDbContext))]
-    partial class CnabDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251223160228_AddBackgroundProcessingFields")]
+    partial class AddBackgroundProcessingFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -31,9 +34,6 @@ namespace CnabApi.Data.Migrations
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("text");
 
-                    b.Property<int>("FailedLineCount")
-                        .HasColumnType("integer");
-
                     b.Property<string>("FileHash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -47,12 +47,6 @@ namespace CnabApi.Data.Migrations
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
 
-                    b.Property<DateTime?>("LastCheckpointAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("LastCheckpointLine")
-                        .HasColumnType("integer");
-
                     b.Property<int>("ProcessedLineCount")
                         .HasColumnType("integer");
 
@@ -65,17 +59,11 @@ namespace CnabApi.Data.Migrations
                     b.Property<int>("RetryCount")
                         .HasColumnType("integer");
 
-                    b.Property<int>("SkippedLineCount")
-                        .HasColumnType("integer");
-
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
                     b.Property<string>("StoragePath")
                         .HasColumnType("text");
-
-                    b.Property<int>("TotalLineCount")
-                        .HasColumnType("integer");
 
                     b.Property<DateTime>("UploadedAt")
                         .HasColumnType("timestamp with time zone");
@@ -212,9 +200,6 @@ namespace CnabApi.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Cpf");
-
-                    b.HasIndex("IdempotencyKey")
-                        .IsUnique();
 
                     b.HasIndex("NatureCode");
 

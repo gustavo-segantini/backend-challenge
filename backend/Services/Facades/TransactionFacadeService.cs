@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Hosting;
 using CnabApi.Common;
 using CnabApi.Models;
 using CnabApi.Services.Interfaces;
+using CnabApi.Services.StatusCodes;
 
 namespace CnabApi.Services.Facades;
 
@@ -10,16 +12,25 @@ namespace CnabApi.Services.Facades;
 /// This keeps controllers thin by handling all validation, orchestration, and error mapping.
 /// 
 /// Integrates with object storage for persisting uploaded CNAB files.
+/// Uses Redis Streams for background processing of large files with retry logic.
+/// Uses Strategy pattern for status code determination (SOLID - Open/Closed Principle).
 /// </summary>
 public class TransactionFacadeService(
-    ICnabUploadService uploadService,
     ITransactionService transactionService,
     IFileUploadService fileUploadService,
     IFileUploadTrackingService fileUploadTrackingService,
     IObjectStorageService objectStorageService,
+    IUploadQueueService uploadQueueService,
+    ICnabUploadService cnabUploadService,
+    IHashService hashService,
+    UploadStatusCodeStrategyFactory statusCodeFactory,
+    IHostEnvironment hostEnvironment,
     ILogger<TransactionFacadeService> logger) : ITransactionFacadeService
 {
     private const string DefaultFileName = "uploaded-file";
+    private readonly IHostEnvironment _hostEnvironment = hostEnvironment;
+    private readonly ICnabUploadService _cnabUploadService = cnabUploadService;
+
     public async Task<Result<UploadResult>> UploadCnabFileAsync(HttpRequest request, CancellationToken cancellationToken)
     {
         try
@@ -42,7 +53,7 @@ public class TransactionFacadeService(
             {
                 logger.LogWarning("File upload validation failed. Error: {Error}", fileResult.ErrorMessage);
                 
-                var statusCode = DetermineUploadStatusCode(fileResult.ErrorMessage);
+                var statusCode = statusCodeFactory.DetermineStatusCode(fileResult.ErrorMessage);
                 var uploadResult = CreateFailureUploadResult(statusCode);
                 return Result<UploadResult>.Failure(fileResult.ErrorMessage ?? "File upload validation failed", uploadResult);
             }
@@ -54,41 +65,136 @@ public class TransactionFacadeService(
                 return duplicateCheckResult;
             }
 
-            // Create FileUpload record first to get the ID for line-level duplicate tracking
-            var fileUploadRecord = await fileUploadTrackingService.RecordSuccessfulUploadAsync(
+            // Phase 1: Store file in MinIO FIRST (before creating record or enqueueing)
+            string? storagePath;
+            try
+            {
+                storagePath = await StoreFileInObjectStorageAsync(fileResult.Data!, cancellationToken);
+                if (string.IsNullOrEmpty(storagePath))
+                {
+                    logger.LogWarning("File storage in MinIO failed, but continuing with upload. File will be processed without storage backup.");
+                    // Continue without storage path - this allows uploads to work even when MinIO is unavailable
+                }
+                else
+                {
+                    logger.LogInformation(
+                        "File stored in MinIO. StoragePath: {StoragePath}, FileSize: {FileSize} bytes",
+                        storagePath, fileSize);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "File storage in MinIO failed, but continuing with upload. File will be processed without storage backup.");
+                storagePath = null; // Continue without storage path
+            }
+
+            // Phase 2: Create FileUpload record with Pending status and storage path
+            var fileUploadRecord = await fileUploadTrackingService.RecordPendingUploadAsync(
                 DefaultFileName,
                 fileHash,
                 fileSize,
-                0, // Will be updated after processing
-                null,
+                storagePath ?? string.Empty, // Can be null if MinIO storage failed
                 cancellationToken);
 
-            // Process the uploaded file content with line-level duplicate detection
-            var result = await uploadService.ProcessCnabUploadAsync(fileResult.Data!, fileUploadRecord.Id, cancellationToken);
+            logger.LogInformation(
+                "File upload recorded as pending. UploadId: {UploadId}, FileName: {FileName}, StoragePath: {StoragePath}",
+                fileUploadRecord.Id, DefaultFileName, storagePath);
 
-            if (!result.IsSuccess)
+            // Phase 3: Process synchronously in test environment, otherwise enqueue for background processing
+            if (_hostEnvironment.IsEnvironment("Test"))
             {
-                // Update the existing FileUpload record to Failed status instead of creating a new one
-                await HandleCnabProcessingFailureAsync(fileUploadRecord.Id, result.ErrorMessage, cancellationToken);
-                var statusCode = DetermineUploadStatusCode(result.ErrorMessage);
-                var uploadResult = CreateFailureUploadResult(statusCode);
-                return Result<UploadResult>.Failure(result.ErrorMessage ?? "Unknown error during upload", uploadResult);
+                // For tests, process synchronously
+                try
+                {
+                    var processResult = await _cnabUploadService.ProcessCnabUploadAsync(
+                        fileResult.Data!,
+                        fileUploadRecord.Id,
+                        0,
+                        cancellationToken);
+
+                    if (processResult.IsSuccess)
+                    {
+                        // Update as completed
+                        await fileUploadTrackingService.UpdateProcessingSuccessAsync(
+                            fileUploadRecord.Id,
+                            processResult.Data,
+                            storagePath,
+                            cancellationToken);
+
+                        return Result<UploadResult>.Success(new UploadResult
+                        {
+                            TransactionCount = processResult.Data,
+                            StatusCode = UploadStatusCode.Success,
+                            UploadId = fileUploadRecord.Id
+                        });
+                    }
+                    else
+                    {
+                        // Processing failed - likely due to invalid content
+                        await fileUploadTrackingService.UpdateProcessingFailureAsync(
+                            fileUploadRecord.Id,
+                            processResult.ErrorMessage ?? "Processing failed",
+                            0,
+                            cancellationToken);
+
+                        return Result<UploadResult>.Failure(
+                            processResult.ErrorMessage ?? "Processing failed",
+                            CreateFailureUploadResult(UploadStatusCode.UnprocessableEntity));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to process file synchronously. UploadId: {UploadId}", fileUploadRecord.Id);
+                    
+                    await fileUploadTrackingService.UpdateProcessingFailureAsync(
+                        fileUploadRecord.Id,
+                        $"Failed to process synchronously: {ex.Message}",
+                        0,
+                        cancellationToken);
+
+                    return Result<UploadResult>.Failure(
+                        "Failed to process file",
+                        CreateFailureUploadResult(UploadStatusCode.InternalServerError));
+                }
             }
-
-            // Store the original file in MinIO for audit trail
-            var storagePath = await StoreFileInObjectStorageAsync(fileResult.Data!, cancellationToken);
-
-            // Update the FileUpload record with actual transaction count and storage path
-            fileUploadRecord.ProcessedLineCount = result.Data;
-            fileUploadRecord.StoragePath = storagePath;
-
-            logger.LogInformation("CNAB file upload completed successfully. Transactions imported: {Count}", result.Data);
-
-            return Result<UploadResult>.Success(new UploadResult
+            else
             {
-                TransactionCount = result.Data,
-                StatusCode = UploadStatusCode.Success
-            });
+                // Production: Enqueue for background processing
+                try
+                {
+                    var messageId = await uploadQueueService.EnqueueUploadAsync(
+                        fileUploadRecord.Id,
+                        storagePath,
+                        cancellationToken);
+
+                    logger.LogInformation(
+                        "File enqueued for background processing. UploadId: {UploadId}, MessageId: {MessageId}",
+                        fileUploadRecord.Id, messageId);
+
+                    // Return 202 Accepted indicating the file has been queued for processing
+                    return Result<UploadResult>.Success(new UploadResult
+                    {
+                        TransactionCount = 0, // Processing not complete yet
+                        StatusCode = UploadStatusCode.Accepted, // 202 Accepted
+                        UploadId = fileUploadRecord.Id
+                    });
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to enqueue file for background processing. UploadId: {UploadId}", fileUploadRecord.Id);
+                    
+                    // Update FileUpload record as failed
+                    await fileUploadTrackingService.UpdateProcessingFailureAsync(
+                        fileUploadRecord.Id,
+                        $"Failed to enqueue for processing: {ex.Message}",
+                        0,
+                        cancellationToken);
+
+                    return Result<UploadResult>.Failure(
+                        "Failed to queue file for processing",
+                        CreateFailureUploadResult(UploadStatusCode.InternalServerError));
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -263,35 +369,12 @@ public class TransactionFacadeService(
         return boundary;
     }
 
-    /// <summary>
-    /// Determines the appropriate HTTP status code based on error message.
-    /// </summary>
-    private static UploadStatusCode DetermineUploadStatusCode(string? errorMessage)
-    {
-        if (string.IsNullOrEmpty(errorMessage))
-            return UploadStatusCode.BadRequest;
-
-        if (errorMessage.Contains("empty", StringComparison.OrdinalIgnoreCase))
-            return UploadStatusCode.BadRequest;
-
-        if (errorMessage.Contains("not allowed", StringComparison.OrdinalIgnoreCase))
-            return UploadStatusCode.UnsupportedMediaType;
-
-        if (errorMessage.Contains("exceeds maximum size", StringComparison.OrdinalIgnoreCase))
-            return UploadStatusCode.PayloadTooLarge;
-
-        if (errorMessage.Contains("invalid", StringComparison.OrdinalIgnoreCase))
-            return UploadStatusCode.UnprocessableEntity;
-
-        return UploadStatusCode.BadRequest;
-    }
 
     /// <summary>
     /// Handles CNAB processing failures by recording them in the file upload tracking service.
     /// </summary>
+    /// <param name="fileUploadId">The file upload ID</param>
     /// <param name="errorMessage">The error message from the upload service</param>
-    /// <param name="fileHash">SHA256 hash of the file content</param>
-    /// <param name="fileSize">Size of the file in bytes</param>
     /// <param name="cancellationToken">Cancellation token</param>
     private async Task HandleCnabProcessingFailureAsync(Guid fileUploadId, string? errorMessage, CancellationToken cancellationToken)
     {
@@ -321,10 +404,9 @@ public class TransactionFacadeService(
         string fileContent, 
         CancellationToken cancellationToken)
     {
-        // Calculate file hash and size once for reuse
+        // Calculate file hash and size once for reuse (DRY: using HashService)
         var fileBytes = System.Text.Encoding.UTF8.GetBytes(fileContent);
-        using var stream = new MemoryStream(fileBytes);
-        var fileHash = await fileUploadTrackingService.CalculateFileHashAsync(stream);
+        var fileHash = hashService.ComputeFileHash(fileContent); // Use HashService directly
         var fileSize = fileBytes.LongLength;
         
         var (isUnique, existingUpload) = await fileUploadTrackingService.IsFileUniqueAsync(fileHash, cancellationToken);

@@ -15,6 +15,17 @@ function UploadForm({ onUpload, isAuthenticated }) {
     }
   };
 
+  const handleClearFile = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setFile(null);
+    setError(null);
+    const fileInput = document.getElementById('file-input');
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -41,7 +52,12 @@ function UploadForm({ onUpload, isAuthenticated }) {
         },
       });
 
-      onUpload(true, response.data.message);
+      // Handle 202 Accepted (background processing) or 200 OK (sync processing)
+      const message = response.status === 202 
+        ? response.data.message || 'File accepted and queued for background processing'
+        : response.data.message;
+      
+      onUpload(true, message);
       setFile(null);
       document.getElementById('file-input').value = '';
     } catch (err) {
@@ -65,6 +81,17 @@ function UploadForm({ onUpload, isAuthenticated }) {
           <span className="file-text">
             {file ? file.name : 'Choose file or drag and drop'}
           </span>
+          {file && (
+            <button
+              type="button"
+              className="file-clear-btn"
+              onClick={handleClearFile}
+              disabled={loading}
+              aria-label="Clear file selection"
+            >
+              ✕
+            </button>
+          )}
         </label>
         <input
           id="file-input"

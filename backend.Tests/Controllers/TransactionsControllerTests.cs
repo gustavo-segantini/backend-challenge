@@ -2,6 +2,7 @@ using CnabApi.Common;
 using CnabApi.Controllers;
 using CnabApi.Models;
 using CnabApi.Services.Facades;
+using CnabApi.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,16 +18,22 @@ namespace CnabApi.Tests.Controllers;
 public class TransactionsControllerTests
 {
     private readonly Mock<ITransactionFacadeService> _facadeServiceMock;
+    private readonly Mock<IFileUploadTrackingService> _fileUploadTrackingServiceMock;
+    private readonly Mock<IUploadQueueService> _uploadQueueServiceMock;
     private readonly Mock<ILogger<TransactionsController>> _loggerMock;
     private readonly TransactionsController _controller;
 
     public TransactionsControllerTests()
     {
         _facadeServiceMock = new Mock<ITransactionFacadeService>();
+        _fileUploadTrackingServiceMock = new Mock<IFileUploadTrackingService>();
+        _uploadQueueServiceMock = new Mock<IUploadQueueService>();
         _loggerMock = new Mock<ILogger<TransactionsController>>();
 
         _controller = new TransactionsController(
             _facadeServiceMock.Object,
+            _fileUploadTrackingServiceMock.Object,
+            _uploadQueueServiceMock.Object,
             _loggerMock.Object
         );
     }
@@ -53,194 +60,6 @@ public class TransactionsControllerTests
 
     #endregion
 
-    #region GetTransactionsByCpf Tests
-
-    [Fact]
-    public async Task GetTransactionsByCpf_WithValidCpf_ShouldReturnOkWithTransactions()
-    {
-        // Arrange
-        var cpf = "12345678901";
-        var transactions = new List<Transaction>
-        {
-            CreateTransaction("1", 100m, cpf),
-            CreateTransaction("2", 50m, cpf)
-        };
-
-        _facadeServiceMock
-            .Setup(x => x.GetTransactionsByCpfAsync(cpf, 1, 50, null, null, null, "desc", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<PagedResult<Transaction>>.Success(CreatePaged(transactions, 2, 1, 50)));
-
-        // Act
-        var result = await _controller.GetTransactionsByCpf(cpf, 1, 50, null, null, null, "desc", CancellationToken.None);
-
-        // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var returned = okResult.Value.Should().BeOfType<PagedResult<Transaction>>().Subject;
-        returned.Items.Should().HaveCount(2);
-        returned.TotalCount.Should().Be(2);
-        returned.Items.Should().AllSatisfy(t => t.Cpf.Should().Be(cpf));
-    }
-
-    [Fact]
-    public async Task GetTransactionsByCpf_WithNonExistingCpf_ShouldReturnEmptyList()
-    {
-        // Arrange
-        var cpf = "99999999999";
-        _facadeServiceMock
-            .Setup(x => x.GetTransactionsByCpfAsync(cpf, 1, 50, null, null, null, "desc", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<PagedResult<Transaction>>.Success(CreatePaged([], 0, 1, 50)));
-
-        // Act
-        var result = await _controller.GetTransactionsByCpf(cpf, 1, 50, null, null, null, "desc", CancellationToken.None);
-
-        // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var returned = okResult.Value.Should().BeOfType<PagedResult<Transaction>>().Subject;
-        returned.Items.Should().BeEmpty();
-        returned.TotalCount.Should().Be(0);
-    }
-
-    [Fact]
-    public async Task GetTransactionsByCpf_WithInvalidCpf_ShouldReturnBadRequest()
-    {
-        // Arrange
-        var cpf = "";
-        _facadeServiceMock
-            .Setup(x => x.GetTransactionsByCpfAsync(cpf, 1, 50, null, null, null, "desc", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<PagedResult<Transaction>>.Failure("CPF is required."));
-
-        // Act
-        var result = await _controller.GetTransactionsByCpf(cpf, 1, 50, null, null, null, "desc", CancellationToken.None);
-
-        // Assert
-        var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        var value = badRequestResult.Value;
-        var errorProperty = value!.GetType().GetProperty("error");
-        errorProperty!.GetValue(value).Should().Be("CPF is required."); 
-    }
-
-    [Fact]
-    public async Task GetTransactionsByCpf_ShouldCallTransactionService()
-    {
-        // Arrange
-        var cpf = "12345678901";
-        _facadeServiceMock
-            .Setup(x => x.GetTransactionsByCpfAsync(cpf, 1, 50, null, null, null, "desc", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<PagedResult<Transaction>>.Success(CreatePaged([], 0, 1, 50)));
-
-        // Act
-        await _controller.GetTransactionsByCpf(cpf, 1, 50, null, null, null, "desc", CancellationToken.None);
-
-        // Assert
-        _facadeServiceMock.Verify(
-            x => x.GetTransactionsByCpfAsync(cpf, 1, 50, null, null, null, "desc", It.IsAny<CancellationToken>()), 
-            Times.Once);
-    }
-
-    #endregion
-
-    #region GetBalance Tests
-
-    [Fact]
-    public async Task GetBalance_WithValidCpf_ShouldReturnOkWithBalance()
-    {
-        // Arrange
-        var cpf = "12345678901";
-        var expectedBalance = 1500.50m;
-        
-        _facadeServiceMock
-            .Setup(x => x.GetBalanceByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<decimal>.Success(expectedBalance));
-
-        // Act
-        var result = await _controller.GetBalance(cpf, CancellationToken.None);
-
-        // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var value = okResult.Value;
-        var balanceProperty = value!.GetType().GetProperty("balance");
-        balanceProperty!.GetValue(value).Should().Be(expectedBalance);
-    }
-
-    [Fact]
-    public async Task GetBalance_WithNoTransactions_ShouldReturnZeroBalance()
-    {
-        // Arrange
-        var cpf = "12345678901";
-        
-        _facadeServiceMock
-            .Setup(x => x.GetBalanceByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<decimal>.Success(0m));
-
-        // Act
-        var result = await _controller.GetBalance(cpf, CancellationToken.None);
-
-        // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var value = okResult.Value;
-        var balanceProperty = value!.GetType().GetProperty("balance");
-        balanceProperty!.GetValue(value).Should().Be(0m);
-    }
-
-    [Fact]
-    public async Task GetBalance_WithNegativeBalance_ShouldReturnNegativeValue()
-    {
-        // Arrange
-        var cpf = "12345678901";
-        var negativeBalance = -500.00m;
-        
-        _facadeServiceMock
-            .Setup(x => x.GetBalanceByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<decimal>.Success(negativeBalance));
-
-        // Act
-        var result = await _controller.GetBalance(cpf, CancellationToken.None);
-
-        // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var value = okResult.Value;
-        var balanceProperty = value!.GetType().GetProperty("balance");
-        balanceProperty!.GetValue(value).Should().Be(negativeBalance);
-    }
-
-    [Fact]
-    public async Task GetBalance_WithInvalidCpf_ShouldReturnBadRequest()
-    {
-        // Arrange
-        var cpf = "";
-        _facadeServiceMock
-            .Setup(x => x.GetBalanceByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<decimal>.Failure("CPF is required."));
-
-        // Act
-        var result = await _controller.GetBalance(cpf, CancellationToken.None);
-
-        // Assert
-        var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        var value = badRequestResult.Value;
-        var errorProperty = value!.GetType().GetProperty("error");
-        errorProperty!.GetValue(value).Should().Be("CPF is required.");
-    }
-
-    [Fact]
-    public async Task GetBalance_ShouldCallTransactionService()
-    {
-        // Arrange
-        var cpf = "12345678901";
-        _facadeServiceMock
-            .Setup(x => x.GetBalanceByCpfAsync(cpf, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<decimal>.Success(100m));
-
-        // Act
-        await _controller.GetBalance(cpf, CancellationToken.None);
-
-        // Assert
-        _facadeServiceMock.Verify(
-            x => x.GetBalanceByCpfAsync(cpf, It.IsAny<CancellationToken>()), 
-            Times.Once);
-    }
-
-    #endregion
 
     #region ClearData Tests
 

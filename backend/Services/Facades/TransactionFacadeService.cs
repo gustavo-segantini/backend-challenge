@@ -24,7 +24,7 @@ public class TransactionFacadeService(
     UploadStatusCodeStrategyFactory statusCodeFactory,
     ILogger<TransactionFacadeService> logger) : ITransactionFacadeService
 {
-    private const string DefaultFileName = "uploaded-file";
+    private static string GetDefaultFileName() => DateTime.UtcNow.ToString("yyyyMMddHHmmss");
 
     public async Task<Result<UploadResult>> UploadCnabFileAsync(HttpRequest request, CancellationToken cancellationToken)
     {
@@ -84,8 +84,9 @@ public class TransactionFacadeService(
             }
 
             // Phase 2: Create FileUpload record with Pending status and storage path
+            var fileName = GetDefaultFileName();
             var fileUploadRecord = await fileUploadTrackingService.RecordPendingUploadAsync(
-                DefaultFileName,
+                fileName,
                 fileHash,
                 fileSize,
                 storagePath ?? string.Empty, // Can be null if MinIO storage failed
@@ -93,7 +94,7 @@ public class TransactionFacadeService(
 
             logger.LogInformation(
                 "File upload recorded as pending. UploadId: {UploadId}, FileName: {FileName}, StoragePath: {StoragePath}",
-                fileUploadRecord.Id, DefaultFileName, storagePath);
+                fileUploadRecord.Id, fileName, storagePath);
 
             // Phase 3: Enqueue for background processing
             try
@@ -254,7 +255,7 @@ public class TransactionFacadeService(
         {
             logger.LogWarning(
                 "Duplicate file upload rejected. File: {FileName}, Previous upload: {PreviousUpload} ({ProcessedLines} lines)",
-                DefaultFileName,
+                GetDefaultFileName(),
                 existingUpload.FileName,
                 existingUpload.ProcessedLineCount);
 

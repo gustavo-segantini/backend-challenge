@@ -293,10 +293,14 @@ public class TransactionsController(
     }
 
     /// <summary>
-    /// Gets transactions grouped by store name and owner for a specific file upload, with balance calculated for each store.
+    /// Gets transactions grouped by store name for a specific file upload, with balance calculated for each store.
     /// 
     /// Returns transactions organized by store from a specific uploaded file, making it easy to see all transactions
     /// and the balance for each store in that file.
+    /// 
+    /// Note: Transactions are grouped by StoreName only. Stores with the same name are grouped together,
+    /// even if they have different StoreOwner values. The storeOwner field in the response shows the
+    /// first owner found for that store name.
     /// </summary>
     /// <param name="uploadId">The ID of the file upload to get transactions from.</param>
     /// <param name="cancellationToken">Token to cancel the request.</param>

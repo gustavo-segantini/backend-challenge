@@ -242,14 +242,17 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
                 .ThenBy(t => t.TransactionTime)
                 .ToListAsync(cancellationToken);
 
-            // Group by StoreName and StoreOwner
+            // Group by StoreName only (ignore StoreOwner differences)
             var grouped = allTransactions
-                .GroupBy(t => new { t.StoreName, t.StoreOwner })
+                .GroupBy(t => t.StoreName)
                 .Select(g => new StoreGroupedTransactions
                 {
-                    StoreName = g.Key.StoreName,
-                    StoreOwner = g.Key.StoreOwner,
-                    Transactions = g.ToList(),
+                    StoreName = g.Key,
+                    // Use the first StoreOwner found for this store name (since we're grouping by StoreName only)
+                    StoreOwner = g.First().StoreOwner,
+                    Transactions = g.OrderBy(t => t.TransactionDate)
+                                    .ThenBy(t => t.TransactionTime)
+                                    .ToList(),
                     Balance = g.Sum(t => t.SignedAmount)
                 })
                 .OrderBy(s => s.StoreName)

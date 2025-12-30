@@ -30,23 +30,13 @@ public class TransactionValidatorTests
 
     #region CPF Validation Tests
 
-    [Fact]
-    public void Validate_WithEmptyCpf_ReturnsFail()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Validate_WithNullOrEmptyCpf_ReturnsFail(string? cpf)
     {
         var transaction = CreateValidTransaction();
-        transaction.Cpf = string.Empty;
-
-        var result = _validator.TestValidate(transaction);
-
-        result.ShouldHaveValidationErrorFor(t => t.Cpf)
-            .WithErrorMessage("CPF is required");
-    }
-
-    [Fact]
-    public void Validate_WithNullCpf_ReturnsFail()
-    {
-        var transaction = CreateValidTransaction();
-        transaction.Cpf = null!;
+        transaction.Cpf = cpf!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -106,23 +96,13 @@ public class TransactionValidatorTests
 
     #region BankCode Validation Tests
 
-    [Fact]
-    public void Validate_WithEmptyBankCode_ReturnsFail()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Validate_WithNullOrEmptyBankCode_ReturnsFail(string? bankCode)
     {
         var transaction = CreateValidTransaction();
-        transaction.BankCode = string.Empty;
-
-        var result = _validator.TestValidate(transaction);
-
-        result.ShouldHaveValidationErrorFor(t => t.BankCode)
-            .WithErrorMessage("Bank code is required");
-    }
-
-    [Fact]
-    public void Validate_WithNullBankCode_ReturnsFail()
-    {
-        var transaction = CreateValidTransaction();
-        transaction.BankCode = null!;
+        transaction.BankCode = bankCode!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -157,23 +137,13 @@ public class TransactionValidatorTests
 
     #region NatureCode Validation Tests
 
-    [Fact]
-    public void Validate_WithEmptyNatureCode_ReturnsFail()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Validate_WithNullOrEmptyNatureCode_ReturnsFail(string? natureCode)
     {
         var transaction = CreateValidTransaction();
-        transaction.NatureCode = string.Empty;
-
-        var result = _validator.TestValidate(transaction);
-
-        result.ShouldHaveValidationErrorFor(t => t.NatureCode)
-            .WithErrorMessage("Nature code is required");
-    }
-
-    [Fact]
-    public void Validate_WithNullNatureCode_ReturnsFail()
-    {
-        var transaction = CreateValidTransaction();
-        transaction.NatureCode = null!;
+        transaction.NatureCode = natureCode!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -247,23 +217,13 @@ public class TransactionValidatorTests
 
     #region Card Validation Tests
 
-    [Fact]
-    public void Validate_WithEmptyCard_ReturnsFail()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Validate_WithNullOrEmptyCard_ReturnsFail(string? card)
     {
         var transaction = CreateValidTransaction();
-        transaction.Card = string.Empty;
-
-        var result = _validator.TestValidate(transaction);
-
-        result.ShouldHaveValidationErrorFor(t => t.Card)
-            .WithErrorMessage("Card is required");
-    }
-
-    [Fact]
-    public void Validate_WithNullCard_ReturnsFail()
-    {
-        var transaction = CreateValidTransaction();
-        transaction.Card = null!;
+        transaction.Card = card!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -298,23 +258,13 @@ public class TransactionValidatorTests
 
     #region StoreOwner Validation Tests
 
-    [Fact]
-    public void Validate_WithEmptyStoreOwner_ReturnsFail()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Validate_WithNullOrEmptyStoreOwner_ReturnsFail(string? storeOwner)
     {
         var transaction = CreateValidTransaction();
-        transaction.StoreOwner = string.Empty;
-
-        var result = _validator.TestValidate(transaction);
-
-        result.ShouldHaveValidationErrorFor(t => t.StoreOwner)
-            .WithErrorMessage("Store owner is required");
-    }
-
-    [Fact]
-    public void Validate_WithNullStoreOwner_ReturnsFail()
-    {
-        var transaction = CreateValidTransaction();
-        transaction.StoreOwner = null!;
+        transaction.StoreOwner = storeOwner!;
 
         var result = _validator.TestValidate(transaction);
 
@@ -349,23 +299,13 @@ public class TransactionValidatorTests
 
     #region StoreName Validation Tests
 
-    [Fact]
-    public void Validate_WithEmptyStoreName_ReturnsFail()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Validate_WithNullOrEmptyStoreName_ReturnsFail(string? storeName)
     {
         var transaction = CreateValidTransaction();
-        transaction.StoreName = string.Empty;
-
-        var result = _validator.TestValidate(transaction);
-
-        result.ShouldHaveValidationErrorFor(t => t.StoreName)
-            .WithErrorMessage("Store name is required");
-    }
-
-    [Fact]
-    public void Validate_WithNullStoreName_ReturnsFail()
-    {
-        var transaction = CreateValidTransaction();
-        transaction.StoreName = null!;
+        transaction.StoreName = storeName!;
 
         var result = _validator.TestValidate(transaction);
 

@@ -223,6 +223,81 @@ public class FileUploadServiceTests
         stream.Dispose();
     }
 
+    [Fact]
+    public async Task ReadCnabFileFromMultipartAsync_WithInvalidContentDisposition_ShouldReturnFailure()
+    {
+        // Arrange
+        var boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+        var content = $"------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n" +
+                     $"Content-Disposition: invalid-format\r\n" +
+                     $"Content-Type: text/plain\r\n\r\n" +
+                     $"Some content\r\n" +
+                     $"------WebKitFormBoundary7MA4YWxkTrZu0gW--\r\n";
+
+        var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        var reader = new MultipartReader(boundary, stream);
+
+        // Act
+        var result = await _service.ReadCnabFileFromMultipartAsync(reader);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        // When Content-Disposition is invalid, it may return "File name is required" or "Invalid file upload format"
+        result.ErrorMessage.Should().Match(s => s.Contains("Invalid file upload format") || s.Contains("File name is required"));
+        
+        stream.Dispose();
+    }
+
+    [Fact]
+    public async Task ReadCnabFileFromMultipartAsync_WhenStreamThrowsException_ShouldReturnFailure()
+    {
+        // Arrange
+        var boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+        var content = $"------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n" +
+                     $"Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n" +
+                     $"Content-Type: text/plain\r\n\r\n" +
+                     $"Some content\r\n" +
+                     $"------WebKitFormBoundary7MA4YWxkTrZu0gW--\r\n";
+
+        var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        var reader = new MultipartReader(boundary, stream);
+        
+        // Dispose stream to cause exception on read
+        stream.Dispose();
+
+        // Act
+        var result = await _service.ReadCnabFileFromMultipartAsync(reader);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("An unexpected error occurred");
+    }
+
+    [Fact]
+    public async Task ReadCnabFileFromMultipartAsync_WithWhitespaceFilename_ShouldReturnFailure()
+    {
+        // Arrange
+        var boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+        var content = $"------WebKitFormBoundary7MA4YWxkTrZu0gW\r\n" +
+                     $"Content-Disposition: form-data; name=\"file\"; filename=\"   \"\r\n" +
+                     $"Content-Type: text/plain\r\n\r\n" +
+                     $"Some content\r\n" +
+                     $"------WebKitFormBoundary7MA4YWxkTrZu0gW--\r\n";
+
+        var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        var reader = new MultipartReader(boundary, stream);
+
+        // Act
+        var result = await _service.ReadCnabFileFromMultipartAsync(reader);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("File name is required");
+        
+        stream.Dispose();
+    }
+
+
     #endregion
 
     #region Helper Methods

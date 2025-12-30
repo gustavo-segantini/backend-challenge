@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using CnabApi.Models;
+using CnabApi.Models.Responses;
 using CnabApi.Services.Facades;
 using CnabApi.Services;
 using CnabApi.Services.Interfaces;
@@ -25,13 +26,11 @@ namespace CnabApi.Controllers;
 [Tags("Transactions")]
 public class TransactionsController(
     ITransactionFacadeService facadeService,
-    IFileUploadTrackingService fileUploadTrackingService,
-    IUploadQueueService uploadQueueService,
+    IUploadManagementService uploadManagementService,
     ILogger<TransactionsController> logger) : ControllerBase
 {
     private readonly ITransactionFacadeService _facadeService = facadeService;
-    private readonly IFileUploadTrackingService _fileUploadTrackingService = fileUploadTrackingService;
-    private readonly IUploadQueueService _uploadQueueService = uploadQueueService;
+    private readonly IUploadManagementService _uploadManagementService = uploadManagementService;
     private readonly ILogger<TransactionsController> _logger = logger;
 
     /// <summary>
@@ -81,45 +80,38 @@ public class TransactionsController(
     {
         var result = await _facadeService.UploadCnabFileAsync(Request, cancellationToken);
 
-        if (!result.IsSuccess)
-        {
-            var errorResponse = new { error = result.ErrorMessage };
-            
-            return result.Data?.StatusCode switch
+        return result.Data?.StatusCode switch
             {
-                UploadStatusCode.BadRequest => BadRequest(errorResponse),
-                UploadStatusCode.UnsupportedMediaType => this.UnsupportedMediaType(result.ErrorMessage!),
-                UploadStatusCode.PayloadTooLarge => this.FileTooLarge(result.ErrorMessage!),
-                UploadStatusCode.UnprocessableEntity => this.UnprocessableEntity(result.ErrorMessage!),
-                _ => BadRequest(errorResponse)
-            };
-        }
-
-        // Return 202 Accepted for background processing
-        if (result.Data?.StatusCode == UploadStatusCode.Accepted)
-        {
-            return Accepted(new
-            {
-                message = "File accepted and queued for background processing",
-                status = "processing"
-            });
-        }
-
-        // Return 200 OK for synchronous processing (e.g., tests)
-        if (result.Data?.StatusCode == UploadStatusCode.Success)
-        {
-            return Ok(new
+            // Success cases
+            UploadStatusCode.Success => Ok(new
             {
                 message = $"Successfully imported {result.Data.TransactionCount} transactions",
                 count = result.Data.TransactionCount
-            });
-        }
+            }),
+            
+            UploadStatusCode.Accepted => Accepted(new
+            {
+                message = "File accepted and queued for background processing",
+                status = "processing"
+            }),
 
-        return Ok(new
+            // Error cases
+            UploadStatusCode.BadRequest => BadRequest(new { error = result.ErrorMessage }),
+            UploadStatusCode.UnsupportedMediaType => this.UnsupportedMediaType(result.ErrorMessage!),
+            UploadStatusCode.PayloadTooLarge => this.FileTooLarge(result.ErrorMessage!),
+            UploadStatusCode.UnprocessableEntity => this.UnprocessableEntity(result.ErrorMessage!),
+            UploadStatusCode.InternalServerError => this.InternalServerError(result.ErrorMessage ?? "An unexpected error occurred"),
+            UploadStatusCode.Conflict => Conflict(new { error = result.ErrorMessage }),
+
+            // Default fallback
+            _ => result.IsSuccess 
+                ? Ok(new
         {
             message = $"Successfully imported {result.Data!.TransactionCount} transactions",
             count = result.Data.TransactionCount
-        });
+                })
+                : BadRequest(new { error = result.ErrorMessage })
+        };
     }
 
 
@@ -141,7 +133,7 @@ public class TransactionsController(
     /// </remarks>
     [HttpGet("uploads")]
     [Authorize]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResponse<FileUploadResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetAllUploads(
         [FromQuery] int page = 1,
@@ -155,40 +147,8 @@ public class TransactionsController(
             statusFilter = parsedStatus;
         }
 
-        var (uploads, totalCount) = await _fileUploadTrackingService.GetAllUploadsAsync(
-            page, pageSize, statusFilter, cancellationToken);
-
-        var result = uploads.Select(u => new
-        {
-            id = u.Id,
-            fileName = u.FileName,
-            status = u.Status.ToString(),
-            fileSize = u.FileSize,
-            totalLineCount = u.TotalLineCount,
-            processedLineCount = u.ProcessedLineCount,
-            failedLineCount = u.FailedLineCount,
-            skippedLineCount = u.SkippedLineCount,
-            lastCheckpointLine = u.LastCheckpointLine,
-            lastCheckpointAt = u.LastCheckpointAt,
-            processingStartedAt = u.ProcessingStartedAt,
-            processingCompletedAt = u.ProcessingCompletedAt,
-            uploadedAt = u.UploadedAt,
-            retryCount = u.RetryCount,
-            errorMessage = u.ErrorMessage,
-            storagePath = u.StoragePath,
-            progressPercentage = u.TotalLineCount > 0 
-                ? Math.Round((double)(u.ProcessedLineCount + u.FailedLineCount + u.SkippedLineCount) / u.TotalLineCount * 100, 2)
-                : 0
-        }).ToList();
-
-        return Ok(new
-        {
-            items = result,
-            totalCount = totalCount,
-            page = page,
-            pageSize = pageSize,
-            totalPages = (int)Math.Ceiling((double)totalCount / pageSize)
-        });
+        var result = await _uploadManagementService.GetAllUploadsAsync(page, pageSize, statusFilter, cancellationToken);
+        return Ok(result);
     }
 
     /// <summary>
@@ -227,35 +187,14 @@ public class TransactionsController(
     /// </remarks>
     [HttpGet("uploads/incomplete")]
     [Authorize]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IncompleteUploadsResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetIncompleteUploads(
         [FromQuery] int timeoutMinutes = 30,
         CancellationToken cancellationToken = default)
     {
-        var incompleteUploads = await _fileUploadTrackingService.FindIncompleteUploadsAsync(timeoutMinutes, cancellationToken);
-
-        var result = incompleteUploads.Select(u => new
-        {
-            id = u.Id,
-            fileName = u.FileName,
-            status = u.Status.ToString(),
-            totalLineCount = u.TotalLineCount,
-            processedLineCount = u.ProcessedLineCount,
-            failedLineCount = u.FailedLineCount,
-            skippedLineCount = u.SkippedLineCount,
-            lastCheckpointLine = u.LastCheckpointLine,
-            lastCheckpointAt = u.LastCheckpointAt,
-            processingStartedAt = u.ProcessingStartedAt,
-            uploadedAt = u.UploadedAt,
-            storagePath = u.StoragePath
-        }).ToList();
-
-        return Ok(new
-        {
-            incompleteUploads = result,
-            count = result.Count
-        });
+        var result = await _uploadManagementService.GetIncompleteUploadsAsync(timeoutMinutes, cancellationToken);
+        return Ok(result);
     }
 
     /// <summary>
@@ -287,49 +226,29 @@ public class TransactionsController(
     /// </remarks>
     [HttpPost("uploads/{uploadId}/resume")]
     [Authorize(Roles = "Admin")]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ResumeUploadResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> ResumeUpload(
         Guid uploadId,
         CancellationToken cancellationToken = default)
     {
-        var upload = await _fileUploadTrackingService.GetUploadByIdAsync(uploadId, cancellationToken);
+        var result = await _uploadManagementService.ResumeUploadAsync(uploadId, cancellationToken);
 
-        if (upload == null)
+        if (!result.IsSuccess)
         {
-            return NotFound(new { error = $"Upload with ID {uploadId} not found" });
+            // Determine appropriate HTTP status based on error message
+            if (result.ErrorMessage?.Contains("not found") == true)
+        {
+                return NotFound(new ErrorResponse(result.ErrorMessage));
+            }
+
+            return BadRequest(new ErrorResponse(result.ErrorMessage ?? "Failed to resume upload"));
         }
 
-        var isIncomplete = await _fileUploadTrackingService.IsUploadIncompleteAsync(uploadId, cancellationToken);
-
-        if (!isIncomplete)
-        {
-            return BadRequest(new { error = "Upload is not incomplete or cannot be resumed" });
-        }
-
-        if (string.IsNullOrEmpty(upload.StoragePath))
-        {
-            return BadRequest(new { error = "Upload does not have a storage path and cannot be resumed" });
-        }
-
-        // Re-enqueue the upload for processing
-        await _uploadQueueService.EnqueueUploadAsync(uploadId, upload.StoragePath, cancellationToken);
-
-        _logger.LogInformation(
-            "Upload re-enqueued for processing. UploadId: {UploadId}, WillResumeFromLine: {LastCheckpointLine}",
-            uploadId, upload.LastCheckpointLine);
-
-        return Ok(new
-        {
-            message = "Upload re-enqueued for processing",
-            uploadId = uploadId,
-            willResumeFromLine = upload.LastCheckpointLine,
-            totalLineCount = upload.TotalLineCount,
-            processedLineCount = upload.ProcessedLineCount
-        });
+        return Ok(result.Data);
     }
 
     /// <summary>
@@ -362,57 +281,15 @@ public class TransactionsController(
     /// </remarks>
     [HttpPost("uploads/resume-all")]
     [Authorize(Roles = "Admin")]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ResumeAllUploadsResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> ResumeAllIncompleteUploads(
         [FromQuery] int timeoutMinutes = 30,
         CancellationToken cancellationToken = default)
     {
-        var incompleteUploads = await _fileUploadTrackingService.FindIncompleteUploadsAsync(timeoutMinutes, cancellationToken);
-
-        var resumedUploads = new List<object>();
-        var errors = new List<string>();
-
-        foreach (var upload in incompleteUploads)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(upload.StoragePath))
-                {
-                    errors.Add($"Upload {upload.Id} does not have a storage path");
-                    continue;
-                }
-
-                await _uploadQueueService.EnqueueUploadAsync(upload.Id, upload.StoragePath, cancellationToken);
-
-                resumedUploads.Add(new
-                {
-                    uploadId = upload.Id,
-                    fileName = upload.FileName,
-                    willResumeFromLine = upload.LastCheckpointLine,
-                    totalLineCount = upload.TotalLineCount,
-                    processedLineCount = upload.ProcessedLineCount
-                });
-
-                _logger.LogInformation(
-                    "Upload re-enqueued for processing. UploadId: {UploadId}, WillResumeFromLine: {LastCheckpointLine}",
-                    upload.Id, upload.LastCheckpointLine);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error resuming upload. UploadId: {UploadId}", upload.Id);
-                errors.Add($"Error resuming upload {upload.Id}: {ex.Message}");
-            }
-        }
-
-        return Ok(new
-        {
-            message = $"Resumed {resumedUploads.Count} incomplete upload(s)",
-            resumedCount = resumedUploads.Count,
-            resumedUploads = resumedUploads,
-            errors = errors.Count > 0 ? errors : null
-        });
+        var result = await _uploadManagementService.ResumeAllIncompleteUploadsAsync(timeoutMinutes, cancellationToken);
+        return Ok(result);
     }
 
     /// <summary>

@@ -1,0 +1,160 @@
+<mxfile host="65bd71144e">
+    <diagram name="CNAB Processing Flow" id="processing-flow">
+        <mxGraphModel dx="5975" dy="4230" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1600" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="CNAB File Upload &amp; Processing Flow" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="860" y="227" width="600" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="phase1-box" value="Phase 1: Upload &amp; Validation (Synchronous)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="160" y="307" width="500" height="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="step1" value="1. Client sends POST /api/v1/transactions/upload&#xa;   multipart/form-data with CNAB file" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="phase1-box" vertex="1">
+                    <mxGeometry x="20" y="30" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="step2" value="2. TransactionsController.UploadCnabFile()&#xa;   → TransactionFacadeService.UploadCnabFileAsync()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="phase1-box" vertex="1">
+                    <mxGeometry x="20" y="80" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="step3" value="3. FileUploadService.ReadCnabFileFromMultipartAsync()&#xa;   • Validate file format (80 chars per line)&#xa;   • Check file size limits" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="phase1-box" vertex="1">
+                    <mxGeometry x="20" y="130" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step4" value="4. HashService.ComputeFileHash()&#xa;   • Calculate SHA256 hash of file content" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="phase1-box" vertex="1">
+                    <mxGeometry x="20" y="190" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="step5" value="5. FileUploadTrackingService.IsFileUniqueAsync()&#xa;   • Check for duplicate file (by hash)&#xa;   • Return 409 Conflict if duplicate" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="phase1-box" vertex="1">
+                    <mxGeometry x="20" y="240" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="phase2-box" value="Phase 2: Storage &amp; Queue (Synchronous)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="160" y="767" width="500" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="step6" value="6. MinioStorageService.UploadFileAsync()&#xa;   • Store file in MinIO object storage&#xa;   • Returns storage path (e.g., cnab-20251229-100000.txt)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="phase2-box" vertex="1">
+                    <mxGeometry x="20" y="30" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step7" value="7. FileUploadTrackingService.RecordPendingUploadAsync()&#xa;   • Create FileUpload record in PostgreSQL&#xa;   • Status: Pending&#xa;   • Store: fileHash, fileName, fileSize, storagePath" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="phase2-box" vertex="1">
+                    <mxGeometry x="20" y="90" width="460" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="step8" value="8. RedisUploadQueueService.EnqueueUploadAsync()&#xa;   • Add message to Redis Stream: cnab:upload:queue&#xa;   • Message contains: uploadId, storagePath" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="phase2-box" vertex="1">
+                    <mxGeometry x="20" y="160" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step9" value="9. Return 202 Accepted to client&#xa;   { message: &quot;File accepted and queued&quot;, status: &quot;processing&quot; }" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="phase2-box" vertex="1">
+                    <mxGeometry x="20" y="220" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="phase3-box" value="Phase 3: Background Processing (Asynchronous)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="750" y="753" width="600" height="620" as="geometry"/>
+                </mxCell>
+                <mxCell id="step10" value="10. UploadProcessingHostedService (Background Worker)&#xa;    • Polls Redis Streams for new messages&#xa;    • Uses Consumer Group pattern for distributed processing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="30" width="560" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step11" value="11. RedisUploadQueueService.DequeueUploadAsync()&#xa;    • Read message from stream using consumer group&#xa;    • Returns: (messageId, uploadId, storagePath)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="90" width="560" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step12" value="12. RedisDistributedLockService.ExecuteWithLockAsync()&#xa;    • Acquire distributed lock: upload:processing:{uploadId}&#xa;    • Prevents concurrent processing by multiple workers" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="150" width="560" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step13" value="13. FileUploadTrackingService.UpdateProcessingStatusAsync()&#xa;    • Update FileUpload.Status: Pending → Processing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="210" width="560" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="step14" value="14. MinioStorageService.DownloadFileAsync()&#xa;    • Download file content from MinIO using storagePath" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="260" width="560" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="step15" value="15. Check for checkpoint (resume support)&#xa;    • FileUpload.LastCheckpointLine&#xa;    • If &gt; 0, resume from that line index" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="310" width="560" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step16" value="16. CnabUploadService.ProcessCnabUploadAsync()&#xa;    • Split file into lines&#xa;    • Process lines in parallel (ParallelWorkers config)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="370" width="560" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step17-box" value="For each line:" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="40" y="430" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="step17a" value="17a. LineProcessor.ProcessLineAsync()&#xa;     • Validate line format (80 chars)&#xa;     • CnabParserService.ParseCnabLine()&#xa;     • Generate idempotencyKey = SHA256(fileHash + lineIndex)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="40" y="470" width="520" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step17b" value="17b. Check for duplicate line&#xa;     • FileUploadTrackingService.IsLineHashUniqueAsync()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="40" y="530" width="520" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="step17c" value="17c. UnitOfWork.ExecuteInTransactionAsync() (ACID)&#xa;     • TransactionService.AddTransactionToContextAsync()&#xa;     • FileUploadTrackingService.CommitLineHashAsync()&#xa;     • SaveChanges() - atomic commit" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="40" y="580" width="520" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step18" value="18. CheckpointManager.SaveCheckpointAsync() (periodic)&#xa;    • Save LastCheckpointLine every N lines (CheckpointInterval)&#xa;    • Enables resume on failure" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="640" width="560" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step19" value="19. FileUploadTrackingService.UpdateProcessingSuccessAsync()&#xa;    • Update Status: Processing → Success&#xa;    • Store: processedLineCount, failedLineCount, skippedLineCount" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="700" width="560" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step20" value="20. RedisUploadQueueService.AcknowledgeMessageAsync()&#xa;    • Mark message as processed in consumer group" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="phase3-box" vertex="1">
+                    <mxGeometry x="20" y="760" width="560" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="phase4-box" value="Phase 4: Automatic Recovery (Background)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="1850" y="1077" width="500" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="step21" value="21. IncompleteUploadRecoveryService (runs every 5 min)&#xa;    • Find uploads with Status=Processing&#xa;    • AND LastCheckpointAt &gt; 30 minutes ago" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="phase4-box" vertex="1">
+                    <mxGeometry x="20" y="30" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step22" value="22. Check if upload is locked&#xa;    • RedisDistributedLockService.LockExistsAsync()&#xa;    • Skip if another worker is processing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="phase4-box" vertex="1">
+                    <mxGeometry x="20" y="90" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step23" value="23. Re-enqueue incomplete uploads&#xa;    • RedisUploadQueueService.EnqueueUploadAsync()&#xa;    • Processing resumes from LastCheckpointLine" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="phase4-box" vertex="1">
+                    <mxGeometry x="20" y="150" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="step24" value="24. Log recovery statistics&#xa;    • Number of uploads recovered&#xa;    • Errors encountered" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="phase4-box" vertex="1">
+                    <mxGeometry x="20" y="210" width="460" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="error-box" value="Error Handling &amp; Retry Logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="1350" y="767" width="500" height="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="error1" value="• Retry Logic: 3 attempts with exponential backoff&#xa;  (1s, 2s, 4s delays)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="error-box" vertex="1">
+                    <mxGeometry x="20" y="30" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="error2" value="• Dead Letter Queue: Failed messages after max retries&#xa;  moved to cnab:upload:dlq stream" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="error-box" vertex="1">
+                    <mxGeometry x="20" y="80" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="error3" value="• Graceful Degradation: MinIO failures don&#39;t block uploads&#xa;  File processing continues without storage backup" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="error-box" vertex="1">
+                    <mxGeometry x="20" y="130" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="error4" value="• Idempotency: Duplicate lines/transactions automatically skipped&#xa;  Based on SHA256(fileHash + lineIndex)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="error-box" vertex="1">
+                    <mxGeometry x="20" y="180" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="error5" value="• Checkpoint Support: Large files can resume from last checkpoint&#xa;  Prevents re-processing on failure/recovery" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="error-box" vertex="1">
+                    <mxGeometry x="20" y="230" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="error6" value="• Distributed Locks: Prevent concurrent processing&#xa;  Multiple API instances can process different uploads safely" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="error-box" vertex="1">
+                    <mxGeometry x="20" y="280" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow1" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#666666" parent="1" source="phase1-box" target="phase2-box" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="660" y="457" as="sourcePoint"/>
+                        <mxPoint x="710" y="407" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="7" value="&lt;span style=&quot;color: rgb(102, 102, 102); font-size: 12px; font-weight: 700; text-wrap-mode: wrap; background-color: rgb(251, 251, 251);&quot;&gt;Validated&lt;/span&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="arrow1">
+                    <mxGeometry x="0.04" y="4" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow2" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#666666" parent="1" source="phase2-box" target="phase3-box" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="660" y="787" as="sourcePoint"/>
+                        <mxPoint x="710" y="737" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="8" value="&lt;span style=&quot;color: rgb(102, 102, 102); font-size: 12px; font-weight: 700; text-wrap-mode: wrap; background-color: rgb(251, 251, 251);&quot;&gt;Queued&lt;/span&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="arrow2">
+                    <mxGeometry x="-0.162" y="-4" relative="1" as="geometry">
+                        <mxPoint y="-1" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow3" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#666666" parent="1" source="phase3-box" target="phase4-box" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1360" y="617" as="sourcePoint"/>
+                        <mxPoint x="1410" y="567" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="9" value="&lt;span style=&quot;color: rgb(102, 102, 102); font-size: 12px; font-weight: 700; text-wrap-mode: wrap; background-color: rgb(251, 251, 251);&quot;&gt;Recovery&lt;/span&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="arrow3">
+                    <mxGeometry x="0.2665" y="3" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

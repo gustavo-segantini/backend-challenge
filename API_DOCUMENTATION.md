@@ -374,11 +374,83 @@ Authorization: Bearer {accessToken}
 
 ## Transações
 
+### Processamento Assíncrono e Filas
+
+O sistema utiliza **Redis Streams** para processamento assíncrono de arquivos CNAB grandes. Isso permite:
+
+- ✅ **Processamento não-bloqueante**: API retorna imediatamente (202 Accepted)
+- ✅ **Escalabilidade horizontal**: Múltiplas instâncias podem processar uploads em paralelo
+- ✅ **Resiliência**: Retry automático com exponential backoff
+- ✅ **Recuperação automática**: Uploads incompletos são detectados e re-enfileirados
+- ✅ **Checkpoints**: Suporte a retomada de processamento após falhas
+
+#### Arquitetura de Filas
+
+```
+┌─────────────────┐
+│  API Endpoint   │
+│  (Controller)   │
+└────────┬────────┘
+         │ Enqueue
+         ▼
+┌─────────────────┐
+│  Redis Streams  │
+│  (cnab:upload:  │
+│   queue)        │
+└────────┬────────┘
+         │ Dequeue (Consumer Group)
+         ▼
+┌─────────────────┐
+│ Background      │
+│ Worker          │
+│ (HostedService) │
+└────────┬────────┘
+         │ Process
+         ▼
+┌─────────────────┐
+│  PostgreSQL     │
+│  (Transactions) │
+└─────────────────┘
+```
+
+#### Dead Letter Queue (DLQ)
+
+Mensagens que falham após todas as tentativas são movidas para a DLQ:
+
+- **Stream**: `cnab:upload:dlq`
+- **Conteúdo**: UploadId, motivo da falha, número de tentativas
+- **Ação**: Requer intervenção manual ou processo de reprocessamento
+
+#### Configuração de Processamento
+
+As opções de processamento podem ser configuradas via `appsettings.json`:
+
+```json
+{
+  "UploadProcessing": {
+    "ParallelWorkers": 4,
+    "CheckpointInterval": 100,
+    "MaxRetryPerLine": 3,
+    "RetryDelayMs": 1000,
+    "RecoveryCheckIntervalMinutes": 5,
+    "StuckUploadTimeoutMinutes": 30
+  }
+}
+```
+
+**Parâmetros**:
+- `ParallelWorkers`: Número de linhas processadas em paralelo
+- `CheckpointInterval`: Linhas processadas antes de salvar checkpoint
+- `MaxRetryPerLine`: Tentativas máximas por linha antes de falhar
+- `RetryDelayMs`: Delay entre tentativas (ms)
+- `RecoveryCheckIntervalMinutes`: Intervalo para verificar uploads incompletos
+- `StuckUploadTimeoutMinutes`: Tempo para considerar upload como travado
+
 ## Transações
 
 ### POST /transactions/upload
 
-Fazer upload e processar arquivo CNAB.
+Fazer upload e processar arquivo CNAB. O arquivo é processado de forma **assíncrona** em background usando Redis Streams.
 
 **Endpoint**: `POST /api/v1/transactions/upload`
 
@@ -416,7 +488,35 @@ Cada linha contém uma transação com 80 caracteres em posições fixas:
 - `8` - Recebimento DOC (Entrada)
 - `9` - Aluguel (Saída)
 
-**Response** (200 OK):
+#### Fluxo de Processamento Assíncrono
+
+1. **Upload Inicial** (Síncrono):
+   - Validação do arquivo (formato, tamanho, extensão)
+   - Cálculo de hash SHA256 para detecção de duplicatas
+   - Armazenamento do arquivo no MinIO (object storage)
+   - Criação do registro `FileUpload` com status `Pending`
+   - Enfileiramento na fila Redis Streams
+
+2. **Processamento em Background** (Assíncrono):
+   - Worker background (`UploadProcessingHostedService`) consome da fila
+   - Download do arquivo do MinIO
+   - Processamento linha por linha em paralelo
+   - Salvamento de checkpoints periódicos para recuperação
+   - Atualização do status: `Pending` → `Processing` → `Success`/`Failed`
+
+3. **Recuperação Automática**:
+   - Serviço `IncompleteUploadRecoveryService` verifica uploads incompletos a cada 5 minutos
+   - Uploads travados em `Processing` por mais de 30 minutos são re-enfileirados automaticamente
+
+**Response (202 Accepted)** - Arquivo aceito e enfileirado:
+```json
+{
+  "message": "File accepted and queued for background processing",
+  "status": "processing"
+}
+```
+
+**Response (200 OK)** - Processamento síncrono (apenas em ambiente de teste):
 ```json
 {
   "message": "Successfully imported 100 transactions",
@@ -431,11 +531,262 @@ Cada linha contém uma transação com 80 caracteres em posições fixas:
 }
 ```
 
+**Response (409 Conflict)** - Arquivo duplicado:
+```json
+{
+  "error": "Este arquivo já foi processado anteriormente. Para evitar duplicatas, o upload foi rejeitado."
+}
+```
+
 **Exemplo cURL**:
 ```bash
 curl -X POST http://localhost:5000/api/v1/transactions/upload \
   -H "Authorization: Bearer {accessToken}" \
   -F "file=@cnab.txt"
+```
+
+#### Verificar Status do Upload
+
+Após receber `202 Accepted`, você pode verificar o status do processamento usando os endpoints de gerenciamento de uploads.
+
+---
+
+### GET /transactions/uploads
+
+Lista todos os uploads com paginação e filtro opcional por status.
+
+**Endpoint**: `GET /api/v1/transactions/uploads`
+
+**Query Parameters**:
+| Parâmetro | Tipo | Padrão | Exemplo | Descrição |
+|-----------|------|-------|---------|-----------|
+| page | int | 1 | 2 | Número da página (1-based) |
+| pageSize | int | 50 | 20 | Itens por página (1-100) |
+| status | string | - | Processing | Filtro por status (Pending, Processing, Success, Failed, Duplicate, PartiallyCompleted) |
+
+**Headers** (OBRIGATÓRIO):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response** (200 OK):
+```json
+{
+  "items": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "fileName": "uploaded-file",
+      "status": "Success",
+      "fileSize": 10240,
+      "totalLineCount": 100,
+      "processedLineCount": 100,
+      "failedLineCount": 0,
+      "skippedLineCount": 0,
+      "lastCheckpointLine": 100,
+      "lastCheckpointAt": "2025-12-29T10:05:00Z",
+      "processingStartedAt": "2025-12-29T10:00:00Z",
+      "processingCompletedAt": "2025-12-29T10:05:00Z",
+      "uploadedAt": "2025-12-29T10:00:00Z",
+      "retryCount": 0,
+      "errorMessage": null,
+      "storagePath": "cnab-20251229-100000-123.txt",
+      "progressPercentage": 100.0
+    }
+  ],
+  "totalCount": 1,
+  "page": 1,
+  "pageSize": 50,
+  "totalPages": 1
+}
+```
+
+**Exemplo cURL**:
+```bash
+# Listar todos os uploads
+curl -X GET "http://localhost:5000/api/v1/transactions/uploads?page=1&pageSize=20" \
+  -H "Authorization: Bearer {accessToken}"
+
+# Filtrar por status
+curl -X GET "http://localhost:5000/api/v1/transactions/uploads?status=Processing" \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+**Status possíveis**:
+- `Pending`: Arquivo enfileirado, aguardando processamento
+- `Processing`: Sendo processado por worker background
+- `Success`: Processamento concluído com sucesso
+- `Failed`: Processamento falhou após todas as tentativas
+- `Duplicate`: Arquivo duplicado (já foi processado anteriormente)
+- `PartiallyCompleted`: Processamento parcialmente concluído (algumas linhas falharam)
+
+---
+
+### GET /transactions/uploads/incomplete
+
+Lista uploads incompletos que estão travados em status `Processing`.
+
+**Endpoint**: `GET /api/v1/transactions/uploads/incomplete`
+
+**Query Parameters**:
+| Parâmetro | Tipo | Padrão | Exemplo | Descrição |
+|-----------|------|-------|---------|-----------|
+| timeoutMinutes | int | 30 | 60 | Minutos máximos que um upload pode estar em Processing antes de ser considerado travado |
+
+**Headers** (OBRIGATÓRIO):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response** (200 OK):
+```json
+{
+  "incompleteUploads": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "fileName": "uploaded-file",
+      "status": "Processing",
+      "fileSize": 10240,
+      "totalLineCount": 100,
+      "processedLineCount": 50,
+      "failedLineCount": 0,
+      "skippedLineCount": 0,
+      "lastCheckpointLine": 50,
+      "lastCheckpointAt": "2025-12-29T10:02:00Z",
+      "processingStartedAt": "2025-12-29T10:00:00Z",
+      "processingCompletedAt": null,
+      "uploadedAt": "2025-12-29T10:00:00Z",
+      "retryCount": 0,
+      "errorMessage": null,
+      "storagePath": "cnab-20251229-100000-123.txt",
+      "progressPercentage": 50.0
+    }
+  ],
+  "count": 1
+}
+```
+
+**Exemplo cURL**:
+```bash
+curl -X GET "http://localhost:5000/api/v1/transactions/uploads/incomplete?timeoutMinutes=30" \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+---
+
+### POST /transactions/uploads/{uploadId}/resume
+
+Retoma o processamento de um upload incompleto específico.
+
+**Endpoint**: `POST /api/v1/transactions/uploads/{uploadId}/resume`
+
+**Path Parameters**:
+| Parâmetro | Tipo | Obrigatório | Exemplo |
+|-----------|------|-----------|---------|
+| uploadId | Guid | Sim | 550e8400-e29b-41d4-a716-446655440000 |
+
+**Headers** (OBRIGATÓRIO - Admin apenas):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response** (200 OK):
+```json
+{
+  "message": "Upload re-enqueued for processing",
+  "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+  "willResumeFromLine": 50,
+  "totalLineCount": 100,
+  "processedLineCount": 50
+}
+```
+
+**Response** (400 Bad Request):
+```json
+{
+  "error": "Upload is not incomplete or cannot be resumed"
+}
+```
+
+**Response** (404 Not Found):
+```json
+{
+  "error": "Upload with ID {uploadId} not found"
+}
+```
+
+**Exemplo cURL**:
+```bash
+curl -X POST "http://localhost:5000/api/v1/transactions/uploads/550e8400-e29b-41d4-a716-446655440000/resume" \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+---
+
+### POST /transactions/uploads/resume-all
+
+Retoma o processamento de todos os uploads incompletos.
+
+**Endpoint**: `POST /api/v1/transactions/uploads/resume-all`
+
+**Query Parameters**:
+| Parâmetro | Tipo | Padrão | Exemplo | Descrição |
+|-----------|------|-------|---------|-----------|
+| timeoutMinutes | int | 30 | 60 | Minutos máximos que um upload pode estar em Processing antes de ser considerado travado |
+
+**Headers** (OBRIGATÓRIO - Admin apenas):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response** (200 OK):
+```json
+{
+  "message": "Resumed 2 incomplete upload(s)",
+  "resumedCount": 2,
+  "resumedUploads": [
+    {
+      "uploadId": "550e8400-e29b-41d4-a716-446655440000",
+      "fileName": "file1.txt",
+      "willResumeFromLine": 50,
+      "totalLineCount": 100,
+      "processedLineCount": 50
+    },
+    {
+      "uploadId": "660e8400-e29b-41d4-a716-446655440001",
+      "fileName": "file2.txt",
+      "willResumeFromLine": 100,
+      "totalLineCount": 200,
+      "processedLineCount": 100
+    }
+  ],
+  "errors": null
+}
+```
+
+**Response com erros parciais** (200 OK):
+```json
+{
+  "message": "Resumed 1 incomplete upload(s)",
+  "resumedCount": 1,
+  "resumedUploads": [
+    {
+      "uploadId": "660e8400-e29b-41d4-a716-446655440001",
+      "fileName": "file2.txt",
+      "willResumeFromLine": 100,
+      "totalLineCount": 200,
+      "processedLineCount": 100
+    }
+  ],
+  "errors": [
+    "Upload 550e8400-e29b-41d4-a716-446655440000 does not have a storage path"
+  ]
+}
+```
+
+**Exemplo cURL**:
+```bash
+curl -X POST "http://localhost:5000/api/v1/transactions/uploads/resume-all?timeoutMinutes=30" \
+  -H "Authorization: Bearer {accessToken}"
 ```
 
 ---
@@ -730,8 +1081,8 @@ curl -X GET "http://localhost:5000/api/v1/transactions/09620676017/search?search
 
 ---
 
-**Última atualização**: Dezembro 2025  
-**Versão**: v1.0
+**Última atualização**: Dezembro 29, 2025  
+**Versão**: v1.1.0
 
 // Upload CNAB file
 export const uploadCnabFile = async (file) => {
@@ -873,10 +1224,13 @@ O projeto mantém alta cobertura de testes para garantir qualidade e confiabilid
 
 | Métrica | Valor | Status |
 |---------|-------|--------|
-| **Line Coverage** | 80.35% | ✅ Excelente |
-| **Branch Coverage** | 68.28% | ✅ Muito Bom |
-| **Method Coverage** | 93.22% | ✅ Excelente |
-| **Total de Testes** | 370 | - |
+| **Line Coverage** | 80.15% | ✅ Excelente |
+| **Branch Coverage** | 70.13% | ✅ Muito Bom |
+| **Method Coverage** | 88.53% | ✅ Excelente |
+| **Total de Testes** | 546 | - |
+| **Testes Aprovados** | 546 | ✅ |
+| **Testes Falhando** | 0 | ✅ |
+| **Testes Ignorados** | 0 | ✅ |
 
 ### Executar Testes
 
@@ -889,7 +1243,27 @@ dotnet test backend.Tests/CnabApi.Tests.csproj
 
 # Apenas integração
 dotnet test backend.IntegrationTests/CnabApi.IntegrationTests.csproj
+
+# Com relatório de cobertura
+dotnet test backend.Tests/CnabApi.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
 ```
+
+### Melhorias na Qualidade dos Testes
+
+**Estrutura Otimizada:**
+- ✅ **Testes consolidados**: Testes duplicados foram mesclados em `[Theory]` com `[InlineData]` para reduzir duplicação
+- ✅ **Testes removidos**: Testes marcados como `Skip` que não podem ser executados foram removidos
+- ✅ **Cobertura expandida**: Adicionados testes para métodos anteriormente não cobertos
+
+**Novos Testes Criados:**
+- `HashServiceTests`: Testes completos para ComputeFileHash, ComputeLineHash, ComputeStreamHashAsync
+- `FileUploadTrackingServiceTests`: Testes para CommitLineHashesAsync, FindIncompleteUploadsAsync, UpdateProcessingResultAsync
+- `TransactionServiceTests`: Testes para AddSingleTransactionAsync, AddTransactionToContextAsync
+- `CnabParserServiceTests`: Testes consolidados para parsing de diferentes campos
+- `EfCoreUnitOfWorkTests`: Testes completos para gerenciamento de transações
+- `LineProcessorTests`: Testes para processamento de linhas com vários cenários
+- `CheckpointManagerTests`: Testes para lógica de checkpoint
+- `UploadStatusCodeStrategyFactoryTests`: Testes para determinação de códigos de status
 
 ### Gerar Relatório de Cobertura
 
@@ -918,8 +1292,26 @@ Código de infraestrutura excluído da cobertura (marcado com `[ExcludeFromCodeC
 - ✅ Extensions de configuração (DI, Middleware, HealthChecks)
 - ✅ DataSeeder (dados iniciais)
 - ✅ Middleware global de exceções
+- ✅ Serviços Redis (RedisDistributedLockService, RedisUploadQueueService) - requerem testes de integração com Redis
+- ✅ Serviços MinIO (MinioInitializationService, MinioStorageService, MinioStorageConfiguration) - requerem testes de integração com MinIO
+- ✅ Infraestrutura de testes (MockDistributedLockService, MockUploadQueueService) - não fazem parte da lógica de negócio
 
-Isso garante que as métricas refletem apenas **código de negócio testável**.
+Isso garante que as métricas refletem apenas **código de negócio testável**. Componentes de infraestrutura que requerem serviços externos (Redis, MinIO) são excluídos e devem ser testados com testes de integração.
+
+### Melhorias na Qualidade dos Testes
+
+**Consolidação de Testes:**
+- ✅ Testes duplicados foram consolidados em `[Theory]` com `[InlineData]` para melhor manutenibilidade
+- ✅ Removidos testes que não podem ser executados (marcados como Skip)
+- ✅ Adicionados testes abrangentes para métodos anteriormente não cobertos
+
+**Cobertura por Módulo:**
+- ✅ **HashService**: 100% cobertura (ComputeFileHash, ComputeLineHash, ComputeStreamHashAsync)
+- ✅ **FileUploadTrackingService**: Cobertura completa incluindo CommitLineHashesAsync, FindIncompleteUploadsAsync, UpdateProcessingResultAsync
+- ✅ **CnabParserService**: Testes consolidados para parsing de diferentes campos
+- ✅ **TransactionService**: Testes para AddSingleTransactionAsync e AddTransactionToContextAsync
+- ✅ **FileService**: Testes consolidados para validação de extensões e conteúdo
+- ✅ **UnitOfWork**: Testes completos para gerenciamento de transações (com supressão de warnings do InMemory)
 
 ---
 
@@ -935,6 +1327,13 @@ Isso garante que as métricas refletem apenas **código de negócio testável**.
   - Data clearing functionality
   - Store information support
   - 80.35% test coverage (370 tests)
+- v1.1.0 (2025-12-29): Test Quality Improvements
+  - Increased test count from 370 to 546 tests
+  - Consolidated duplicate tests into `[Theory]` tests with `[InlineData]`
+  - Added comprehensive tests for previously uncovered methods
+  - Removed tests that cannot be executed (Skip tests)
+  - Marked infrastructure services as `[ExcludeFromCodeCoverage]` (Redis, MinIO, Mock services)
+  - Current coverage: 80.15% line, 70.13% branch, 88.53% method (546 tests)
 
 ---
 
@@ -944,4 +1343,4 @@ For questions, bug reports, or feature requests, please contact the development 
 
 ---
 
-*Last Updated: December 21, 2025*
+*Last Updated: December 29, 2025*

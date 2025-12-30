@@ -545,6 +545,12 @@ curl -X POST http://localhost:5000/api/v1/transactions/upload \
   -F "file=@cnab.txt"
 ```
 
+#### Formato do Nome do Arquivo
+
+O nome do arquivo (`fileName`) salvo no banco de dados segue o formato `yyyyMMddHHmmss` (data e hora UTC do upload).
+
+**Exemplo**: Um arquivo enviado em 29 de dezembro de 2025 às 14:30:25 UTC terá `fileName` = `"20251229143025"`.
+
 #### Verificar Status do Upload
 
 Após receber `202 Accepted`, você pode verificar o status do processamento usando os endpoints de gerenciamento de uploads.
@@ -575,7 +581,7 @@ Authorization: Bearer {accessToken}
   "items": [
     {
       "id": "550e8400-e29b-41d4-a716-446655440000",
-      "fileName": "uploaded-file",
+      "fileName": "20251229143025",
       "status": "Success",
       "fileSize": 10240,
       "totalLineCount": 100,
@@ -643,7 +649,7 @@ Authorization: Bearer {accessToken}
   "incompleteUploads": [
     {
       "id": "550e8400-e29b-41d4-a716-446655440000",
-      "fileName": "uploaded-file",
+      "fileName": "20251229143025",
       "status": "Processing",
       "fileSize": 10240,
       "totalLineCount": 100,
@@ -924,6 +930,74 @@ Authorization: Bearer {accessToken}
 **Exemplo cURL**:
 ```bash
 curl -X GET "http://localhost:5000/api/v1/transactions/09620676017/search?searchTerm=LOJA" \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+---
+
+### GET /transactions/stores/{uploadId}
+
+Obter transações agrupadas por nome da loja para um upload específico, com saldo calculado para cada loja.
+
+**Endpoint**: `GET /api/v1/transactions/stores/{uploadId}`
+
+**Path Parameters**:
+| Parâmetro | Tipo | Obrigatório | Exemplo |
+|-----------|------|-----------|---------|
+| uploadId | Guid | Sim | 550e8400-e29b-41d4-a716-446655440000 |
+
+**Headers** (OBRIGATÓRIO):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Nota importante sobre agrupamento**:
+- As transações são agrupadas **apenas por `StoreName`** (nome da loja)
+- Lojas com o mesmo nome são agrupadas juntas, mesmo que tenham `StoreOwner` diferentes
+- O campo `storeOwner` na resposta mostra o primeiro proprietário encontrado para aquela loja
+- O saldo (`balance`) é calculado somando todas as transações da loja, independente do proprietário
+
+**Response** (200 OK):
+```json
+[
+  {
+    "storeName": "BAR DO JOÃO",
+    "storeOwner": "096.206.760-17",
+    "transactions": [
+      {
+        "id": 1,
+        "storeName": "BAR DO JOÃO",
+        "storeOwner": "096.206.760-17",
+        "transactionDate": "2019-03-01T00:00:00Z",
+        "transactionTime": "15:34:53",
+        "amount": 142.00,
+        "natureCode": "3"
+      },
+      {
+        "id": 2,
+        "storeName": "BAR DO JOÃO",
+        "storeOwner": "123.456.789-00",
+        "transactionDate": "2019-03-02T10:20:00Z",
+        "transactionTime": "10:20:00",
+        "amount": 50.00,
+        "natureCode": "1"
+      }
+    ],
+    "balance": 92.00
+  }
+]
+```
+
+**Response** (404 Not Found) - Nenhuma transação encontrada:
+```json
+{
+  "error": "No transactions found for this upload"
+}
+```
+
+**Exemplo cURL**:
+```bash
+curl -X GET "http://localhost:5000/api/v1/transactions/stores/550e8400-e29b-41d4-a716-446655440000" \
   -H "Authorization: Bearer {accessToken}"
 ```
 

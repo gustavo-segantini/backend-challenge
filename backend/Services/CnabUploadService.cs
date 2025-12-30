@@ -201,12 +201,17 @@ public class CnabUploadService(
             // Wait for all tasks to complete
             await Task.WhenAll(tasks);
 
+            // Small delay to allow any background checkpoint saves to complete
+            // This ensures we get the most up-to-date values from the database
+            await Task.Delay(100, cancellationToken);
+
             // Final checkpoint - save checkpoint before final status update to ensure progress is saved
             using (var finalScope = serviceScopeFactory.CreateScope())
             {
                 var finalFileUploadTrackingService = finalScope.ServiceProvider.GetRequiredService<IFileUploadTrackingService>();
                 
                 // Get current upload record to calculate totals
+                // Refresh from database to get latest checkpoint values
                 var uploadRecord = await finalFileUploadTrackingService.GetUploadByIdAsync(fileUploadId, cancellationToken);
                 
                 if (uploadRecord == null)
@@ -215,21 +220,60 @@ public class CnabUploadService(
                     return Result<int>.Failure("Upload record not found");
                 }
                 
-                // Calculate total processed lines (including previously processed from checkpoints)
-                var previousProcessed = uploadRecord.ProcessedLineCount;
-                var previousFailed = uploadRecord.FailedLineCount;
-                var previousSkipped = uploadRecord.SkippedLineCount;
-                
-                // Sum incremental counts with previous totals
-                var totalProcessed = previousProcessed + processedCount;
-                var totalFailed = previousFailed + failedCount;
-                var totalSkipped = previousSkipped + skippedCount;
-                var totalProcessedLines = totalProcessed + totalFailed + totalSkipped;
+                // IMPORTANT: Checkpoints in background already save incremental values to the database.
+                // The incremental counters (processedCount, failedCount, skippedCount) are local and
+                // represent lines processed since the last checkpoint. Since checkpoints save these
+                // incrementally, we should use ONLY the database values after the delay, not sum them again.
+                // However, we need to account for any lines processed after the last checkpoint.
                 
                 // Calculate final max line (absolute index in original file)
                 var finalMaxLine = processedLines.Count > 0 
                     ? processedLines.Max() 
                     : startFromLine;
+                
+                // Get the last checkpoint line from database to determine if there are uncommitted increments
+                var dbLastCheckpointLine = uploadRecord.LastCheckpointLine;
+                
+                // If the final max line is greater than the last checkpoint, there are uncommitted increments
+                // Otherwise, all increments were already saved by checkpoints
+                var hasUncommittedIncrements = finalMaxLine > dbLastCheckpointLine;
+                
+                int totalProcessed;
+                int totalFailed;
+                int totalSkipped;
+                
+                if (hasUncommittedIncrements)
+                {
+                    // There are lines processed after the last checkpoint - add incremental counts
+                    var previousProcessed = uploadRecord.ProcessedLineCount;
+                    var previousFailed = uploadRecord.FailedLineCount;
+                    var previousSkipped = uploadRecord.SkippedLineCount;
+                    
+                    totalProcessed = previousProcessed + processedCount;
+                    totalFailed = previousFailed + failedCount;
+                    totalSkipped = previousSkipped + skippedCount;
+                    
+                    logger.LogInformation(
+                        "Uncommitted increments found. UploadId: {UploadId}, LastCheckpointLine: {LastCheckpoint}, FinalMaxLine: {FinalMax}, Previous: Processed={PreviousProcessed}, Failed={PreviousFailed}, Skipped={PreviousSkipped}, Incremental: Processed={IncrementalProcessed}, Failed={IncrementalFailed}, Skipped={IncrementalSkipped}, Total: Processed={TotalProcessed}, Failed={TotalFailed}, Skipped={TotalSkipped}",
+                        fileUploadId, dbLastCheckpointLine, finalMaxLine, previousProcessed, previousFailed, previousSkipped, processedCount, failedCount, skippedCount, totalProcessed, totalFailed, totalSkipped);
+                }
+                else
+                {
+                    // All increments were already saved by checkpoints - use only database values
+                    totalProcessed = uploadRecord.ProcessedLineCount;
+                    totalFailed = uploadRecord.FailedLineCount;
+                    totalSkipped = uploadRecord.SkippedLineCount;
+                    
+                    logger.LogInformation(
+                        "All increments already saved in checkpoints. UploadId: {UploadId}, Using database values: Processed={TotalProcessed}, Failed={TotalFailed}, Skipped={TotalSkipped}",
+                        fileUploadId, totalProcessed, totalFailed, totalSkipped);
+                }
+                
+                var totalProcessedLines = totalProcessed + totalFailed + totalSkipped;
+                
+                logger.LogInformation(
+                    "Calculating final totals. UploadId: {UploadId}, Total: Processed={TotalProcessed}, Failed={TotalFailed}, Skipped={TotalSkipped}, TotalLines={TotalLines}, ExpectedTotal={ExpectedTotal}",
+                    fileUploadId, totalProcessed, totalFailed, totalSkipped, totalProcessedLines, totalLines);
                 
                 // Determine checkpoint line: if all lines processed, use last line index; otherwise use max processed
                 var allLinesProcessed = totalLines > 0 && totalProcessedLines >= totalLines;
@@ -252,6 +296,7 @@ public class CnabUploadService(
                 }
 
                 // Update final processing result with totals
+                // This will mark as Success if all lines are processed
                 await finalFileUploadTrackingService.UpdateProcessingResultAsync(
                     fileUploadId,
                     totalProcessed,

@@ -422,7 +422,13 @@ public class FileUploadTrackingService(
 
         // Calculate total processed lines
         var totalProcessed = processedCount + failedCount + skippedCount;
+        // Use >= to handle edge cases where totalProcessed might slightly exceed TotalLineCount due to rounding
+        // Also handle case where TotalLineCount might be 0 (shouldn't happen, but defensive)
         var allLinesProcessed = fileUpload.TotalLineCount > 0 && totalProcessed >= fileUpload.TotalLineCount;
+
+        _logger.LogDebug(
+            "Updating processing result. UploadId: {UploadId}, TotalLineCount: {Total}, TotalProcessed: {TotalProcessed} (Processed: {Processed}, Failed: {Failed}, Skipped: {Skipped}), AllLinesProcessed: {AllProcessed}",
+            uploadId, fileUpload.TotalLineCount, totalProcessed, processedCount, failedCount, skippedCount, allLinesProcessed);
 
         // Determine final status
         if (allLinesProcessed)
@@ -443,6 +449,10 @@ public class FileUploadTrackingService(
                 fileUpload.LastCheckpointLine = fileUpload.TotalLineCount - 1; // 0-based index
                 fileUpload.LastCheckpointAt = DateTime.UtcNow;
             }
+            
+            _logger.LogInformation(
+                "All lines processed. UploadId: {UploadId}, Status: {Status}, TotalLineCount: {Total}, TotalProcessed: {TotalProcessed}",
+                uploadId, fileUpload.Status, fileUpload.TotalLineCount, totalProcessed);
         }
         else
         {
@@ -456,6 +466,10 @@ public class FileUploadTrackingService(
                     fileUpload.Status = FileUploadStatus.PartiallyCompleted;
                 }
             }
+            
+            _logger.LogDebug(
+                "Not all lines processed yet. UploadId: {UploadId}, Status: {Status}, TotalLineCount: {Total}, TotalProcessed: {TotalProcessed}",
+                uploadId, fileUpload.Status, fileUpload.TotalLineCount, totalProcessed);
         }
 
         _db.FileUploads.Update(fileUpload);

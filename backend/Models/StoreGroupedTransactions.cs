@@ -1,8 +1,11 @@
-namespace CnabApi.Models;
+using System.Diagnostics.CodeAnalysis;
 
+namespace CnabApi.Models;
 /// <summary>
 /// Represents transactions grouped by store with calculated balance.
 /// </summary>
+
+[ExcludeFromCodeCoverage]
 public class StoreGroupedTransactions
 {
     /// <summary>

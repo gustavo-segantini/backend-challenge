@@ -1,0 +1,163 @@
+<mxfile host="65bd71144e">
+    <diagram name="CNAB Parser Architecture" id="architecture">
+        <mxGraphModel dx="1406" dy="995" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1400" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="client" value="Client (Browser/Postman)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="875" y="255" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-layer" value="API Layer (ASP.NET Core)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="775" y="355" width="400" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="controllers" value="Controllers&#xa;• TransactionsController&#xa;• AuthController" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="api-layer" vertex="1">
+                    <mxGeometry x="20" y="30" width="160" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="middleware" value="Middleware&#xa;• Exception Handling&#xa;• Correlation ID&#xa;• CORS" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="api-layer" vertex="1">
+                    <mxGeometry x="220" y="30" width="160" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="app-layer" value="Application Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="775" y="595" width="400" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="facade" value="TransactionFacadeService&#xa;(Orchestration)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="app-layer" vertex="1">
+                    <mxGeometry x="20" y="30" width="170" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="upload-service" value="CnabUploadService&#xa;(Line Processing)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="app-layer" vertex="1">
+                    <mxGeometry x="20" y="100" width="170" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="parser" value="CnabParserService&#xa;(Parse 80-char lines)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="app-layer" vertex="1">
+                    <mxGeometry x="20" y="170" width="170" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="file-service" value="FileUploadService&#xa;FileUploadTrackingService" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="app-layer" vertex="1">
+                    <mxGeometry x="20" y="240" width="170" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="line-processor" value="LineProcessor&#xa;CheckpointManager" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="app-layer" vertex="1">
+                    <mxGeometry x="210" y="30" width="170" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="transaction-service" value="TransactionService&#xa;(CRUD Operations)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="app-layer" vertex="1">
+                    <mxGeometry x="210" y="100" width="170" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="hash-service" value="HashService&#xa;(SHA256)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="app-layer" vertex="1">
+                    <mxGeometry x="210" y="170" width="170" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="bg-services" value="Background Services (Hosted)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="1265" y="635" width="300" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="upload-worker" value="UploadProcessingHostedService&#xa;(Queue Consumer)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="bg-services" vertex="1">
+                    <mxGeometry x="20" y="30" width="260" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="recovery-service" value="IncompleteUploadRecoveryService&#xa;(Auto Recovery)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="bg-services" vertex="1">
+                    <mxGeometry x="20" y="100" width="260" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="minio-init" value="MinioInitializationService&#xa;(Bucket Setup)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="bg-services" vertex="1">
+                    <mxGeometry x="20" y="170" width="260" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="infra-layer" value="Infrastructure Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="775" y="985" width="1110" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="postgres" value="PostgreSQL 16&#xa;&#xa;• Transactions&#xa;• FileUploads&#xa;• FileUploadLineHashes&#xa;• Users&#xa;• RefreshTokens" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacingLeft=10" parent="infra-layer" vertex="1">
+                    <mxGeometry x="15.857142857142858" y="30" width="158.57142857142856" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="redis" value="Redis 7&#xa;&#xa;• Streams (Queue)&#xa;• Consumer Groups&#xa;• Distributed Locks&#xa;• Dead Letter Queue" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=10" parent="infra-layer" vertex="1">
+                    <mxGeometry x="206.14285714285714" y="30" width="158.57142857142856" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="minio" value="MinIO&#xa;&#xa;• Object Storage&#xa;• File Persistence&#xa;• Audit Trail" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacingLeft=10" parent="infra-layer" vertex="1">
+                    <mxGeometry x="396.4285714285714" y="30" width="158.57142857142856" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="ef-core" value="Entity Framework Core&#xa;&#xa;• DbContext&#xa;• Migrations&#xa;• Unit of Work" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="infra-layer" vertex="1">
+                    <mxGeometry x="586.7142857142857" y="30" width="158.57142857142856" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="storage-services" value="Storage Services&#xa;&#xa;• MinioStorageService&#xa;• RedisUploadQueueService&#xa;• RedisDistributedLockService" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10" parent="infra-layer" vertex="1">
+                    <mxGeometry x="777" y="30" width="158.57142857142856" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="logging" value="Serilog&#xa;&#xa;• Structured Logging&#xa;• Correlation ID&#xa;• Application Insights" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10" parent="infra-layer" vertex="1">
+                    <mxGeometry x="967.2857142857143" y="30" width="126.85714285714286" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="conn1" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="client" target="api-layer" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="975" y="415" as="sourcePoint"/>
+                        <mxPoint x="1025" y="365" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="conn2" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="api-layer" target="app-layer" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="975" y="615" as="sourcePoint"/>
+                        <mxPoint x="1025" y="565" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="conn3" value="Queue Message" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="app-layer" target="bg-services" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1175" y="735" as="sourcePoint"/>
+                        <mxPoint x="1225" y="685" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="conn4" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" parent="1" source="app-layer" target="postgres" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="975" y="915" as="sourcePoint"/>
+                        <mxPoint x="1025" y="865" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="conn5" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="app-layer" target="redis" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="975" y="915" as="sourcePoint"/>
+                        <mxPoint x="1025" y="865" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="conn6" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="app-layer" target="minio" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="975" y="915" as="sourcePoint"/>
+                        <mxPoint x="1025" y="865" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="conn7" value="Dequeue" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="bg-services" target="redis" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1425" y="815" as="sourcePoint"/>
+                        <mxPoint x="1475" y="765" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="conn8" value="Download" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" parent="1" source="bg-services" target="minio" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1425" y="815" as="sourcePoint"/>
+                        <mxPoint x="1475" y="765" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="conn9" value="Save Transactions" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" parent="1" source="bg-services" target="postgres" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="1425" y="815" as="sourcePoint"/>
+                        <mxPoint x="1475" y="765" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="flow-label-1" value="1. Upload Request" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" parent="1" vertex="1">
+                    <mxGeometry x="875" y="335" width="100" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow-label-2" value="2. Validate &amp; Enqueue" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" parent="1" vertex="1">
+                    <mxGeometry x="820" y="575" width="155" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow-label-3" value="3. Background Processing" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" parent="1" vertex="1">
+                    <mxGeometry x="1355" y="615" width="120" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="title" value="CNAB Parser API - System Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="675" y="215" width="600" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-box" value="Legend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;verticalAlign=top;spacingTop=10" parent="1" vertex="1">
+                    <mxGeometry x="115" y="255" width="200" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-client" value="Client/External" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="125" y="275" width="180" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-api" value="API/Presentation" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="125" y="315" width="180" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-app" value="Application/Business" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="125" y="355" width="180" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-bg" value="Background Services" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="125" y="395" width="180" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-infra" value="Infrastructure" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="125" y="435" width="180" height="20" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

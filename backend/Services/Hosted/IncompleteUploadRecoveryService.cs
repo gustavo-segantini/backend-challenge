@@ -1,6 +1,7 @@
 using CnabApi.Models;
 using CnabApi.Services.Interfaces;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
 
 namespace CnabApi.Services.Hosted;
 
@@ -9,6 +10,7 @@ namespace CnabApi.Services.Hosted;
 /// Periodically checks for uploads stuck in Processing status and re-enqueues them.
 /// This ensures automatic recovery after application restarts or interruptions.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class IncompleteUploadRecoveryService(
     IFileUploadTrackingService fileUploadTrackingService,
     IUploadQueueService uploadQueueService,

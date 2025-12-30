@@ -1,8 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace CnabApi.Models;
 
 /// <summary>
 /// Generic paginated result wrapper with metadata.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class PagedResult<T>
 {
     public List<T> Items { get; set; } = [];

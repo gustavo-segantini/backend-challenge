@@ -20,31 +20,21 @@ public class FileServiceTests
 
     #region ReadCnabFileAsync - Success Cases
 
-    [Fact]
-    public async Task ReadCnabFileAsync_WithValidTxtFile_ShouldReturnSuccess()
+    [Theory]
+    [InlineData("test.txt", "Valid CNAB content here")]
+    [InlineData("TEST.TXT", "Valid content")] // Uppercase extension
+    [InlineData("file.Txt", "Mixed case extension")]
+    public async Task ReadCnabFileAsync_WithValidTxtFile_ShouldReturnSuccess(string fileName, string content)
     {
         // Arrange
-        var file = CreateMockFormFile("test.txt", "Valid CNAB content here");
+        var file = CreateMockFormFile(fileName, content);
 
         // Act
         var result = await _fileService.ReadCnabFileAsync(file);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data.Should().Be("Valid CNAB content here");
-    }
-
-    [Fact]
-    public async Task ReadCnabFileAsync_WithUppercaseExtension_ShouldReturnSuccess()
-    {
-        // Arrange - FileService uses ToLowerInvariant(), so .TXT becomes .txt
-        var file = CreateMockFormFile("TEST.TXT", "Valid content");
-
-        // Act
-        var result = await _fileService.ReadCnabFileAsync(file);
-
-        // Assert
-        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().Be(content);
     }
 
     [Fact]
@@ -96,62 +86,29 @@ public class FileServiceTests
         result.ErrorMessage.Should().Contain("provided");
     }
 
-    [Fact]
-    public async Task ReadCnabFileAsync_WithInvalidExtension_ShouldReturnFailure()
-    {
-        // Arrange
-        var file = CreateMockFormFile("test.pdf", "Some content");
-
-        // Act
-        var result = await _fileService.ReadCnabFileAsync(file);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain(".txt");
-    }
-
-    [Fact]
-    public async Task ReadCnabFileAsync_WithExeFile_ShouldReturnFailure()
-    {
-        // Arrange
-        var file = CreateMockFormFile("malicious.exe", "Some content");
-
-        // Act
-        var result = await _fileService.ReadCnabFileAsync(file);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task ReadCnabFileAsync_WithNoExtension_ShouldReturnFailure()
-    {
-        // Arrange
-        var file = CreateMockFormFile("noextension", "Some content");
-
-        // Act
-        var result = await _fileService.ReadCnabFileAsync(file);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
-    }
-
     [Theory]
-    [InlineData(".doc")]
-    [InlineData(".xlsx")]
-    [InlineData(".csv")]
-    [InlineData(".json")]
-    [InlineData(".xml")]
-    public async Task ReadCnabFileAsync_WithDisallowedExtensions_ShouldReturnFailure(string extension)
+    [InlineData("test.pdf", ".txt")]
+    [InlineData("malicious.exe", null)]
+    [InlineData("noextension", null)]
+    [InlineData("test.doc", null)]
+    [InlineData("test.xlsx", null)]
+    [InlineData("test.csv", null)]
+    [InlineData("test.json", null)]
+    [InlineData("test.xml", null)]
+    public async Task ReadCnabFileAsync_WithInvalidOrDisallowedExtensions_ShouldReturnFailure(string fileName, string? expectedErrorSubstring)
     {
         // Arrange
-        var file = CreateMockFormFile($"test{extension}", "Some content");
+        var file = CreateMockFormFile(fileName, "Some content");
 
         // Act
         var result = await _fileService.ReadCnabFileAsync(file);
 
         // Assert
         result.IsSuccess.Should().BeFalse();
+        if (expectedErrorSubstring != null)
+        {
+            result.ErrorMessage.Should().Contain(expectedErrorSubstring);
+        }
     }
 
     [Fact]

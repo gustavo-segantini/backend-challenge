@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Hosting;
 using CnabApi.Common;
 using CnabApi.Models;
 using CnabApi.Services.Interfaces;
@@ -21,15 +20,11 @@ public class TransactionFacadeService(
     IFileUploadTrackingService fileUploadTrackingService,
     IObjectStorageService objectStorageService,
     IUploadQueueService uploadQueueService,
-    ICnabUploadService cnabUploadService,
     IHashService hashService,
     UploadStatusCodeStrategyFactory statusCodeFactory,
-    IHostEnvironment hostEnvironment,
     ILogger<TransactionFacadeService> logger) : ITransactionFacadeService
 {
     private const string DefaultFileName = "uploaded-file";
-    private readonly IHostEnvironment _hostEnvironment = hostEnvironment;
-    private readonly ICnabUploadService _cnabUploadService = cnabUploadService;
 
     public async Task<Result<UploadResult>> UploadCnabFileAsync(HttpRequest request, CancellationToken cancellationToken)
     {
@@ -100,100 +95,40 @@ public class TransactionFacadeService(
                 "File upload recorded as pending. UploadId: {UploadId}, FileName: {FileName}, StoragePath: {StoragePath}",
                 fileUploadRecord.Id, DefaultFileName, storagePath);
 
-            // Phase 3: Process synchronously in test environment, otherwise enqueue for background processing
-            if (_hostEnvironment.IsEnvironment("Test"))
+            // Phase 3: Enqueue for background processing
+            try
             {
-                // For tests, process synchronously
-                try
+                var messageId = await uploadQueueService.EnqueueUploadAsync(
+                    fileUploadRecord.Id,
+                    storagePath ?? string.Empty,
+                    cancellationToken);
+
+                logger.LogInformation(
+                    "File enqueued for background processing. UploadId: {UploadId}, MessageId: {MessageId}",
+                    fileUploadRecord.Id, messageId);
+
+                // Return 202 Accepted indicating the file has been queued for processing
+                return Result<UploadResult>.Success(new UploadResult
                 {
-                    var processResult = await _cnabUploadService.ProcessCnabUploadAsync(
-                        fileResult.Data!,
-                        fileUploadRecord.Id,
-                        0,
-                        cancellationToken);
-
-                    if (processResult.IsSuccess)
-                    {
-                        // Update as completed
-                        await fileUploadTrackingService.UpdateProcessingSuccessAsync(
-                            fileUploadRecord.Id,
-                            processResult.Data,
-                            storagePath,
-                            cancellationToken);
-
-                        return Result<UploadResult>.Success(new UploadResult
-                        {
-                            TransactionCount = processResult.Data,
-                            StatusCode = UploadStatusCode.Success,
-                            UploadId = fileUploadRecord.Id
-                        });
-                    }
-                    else
-                    {
-                        // Processing failed - likely due to invalid content
-                        await fileUploadTrackingService.UpdateProcessingFailureAsync(
-                            fileUploadRecord.Id,
-                            processResult.ErrorMessage ?? "Processing failed",
-                            0,
-                            cancellationToken);
-
-                        return Result<UploadResult>.Failure(
-                            processResult.ErrorMessage ?? "Processing failed",
-                            CreateFailureUploadResult(UploadStatusCode.UnprocessableEntity));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to process file synchronously. UploadId: {UploadId}", fileUploadRecord.Id);
-                    
-                    await fileUploadTrackingService.UpdateProcessingFailureAsync(
-                        fileUploadRecord.Id,
-                        $"Failed to process synchronously: {ex.Message}",
-                        0,
-                        cancellationToken);
-
-                    return Result<UploadResult>.Failure(
-                        "Failed to process file",
-                        CreateFailureUploadResult(UploadStatusCode.InternalServerError));
-                }
+                    TransactionCount = 0, // Processing not complete yet
+                    StatusCode = UploadStatusCode.Accepted, // 202 Accepted
+                    UploadId = fileUploadRecord.Id
+                });
             }
-            else
+            catch (Exception ex)
             {
-                // Production: Enqueue for background processing
-                try
-                {
-                    var messageId = await uploadQueueService.EnqueueUploadAsync(
-                        fileUploadRecord.Id,
-                        storagePath,
-                        cancellationToken);
+                logger.LogError(ex, "Failed to enqueue file for background processing. UploadId: {UploadId}", fileUploadRecord.Id);
+                
+                // Update FileUpload record as failed
+                await fileUploadTrackingService.UpdateProcessingFailureAsync(
+                    fileUploadRecord.Id,
+                    $"Failed to enqueue for processing: {ex.Message}",
+                    0,
+                    cancellationToken);
 
-                    logger.LogInformation(
-                        "File enqueued for background processing. UploadId: {UploadId}, MessageId: {MessageId}",
-                        fileUploadRecord.Id, messageId);
-
-                    // Return 202 Accepted indicating the file has been queued for processing
-                    return Result<UploadResult>.Success(new UploadResult
-                    {
-                        TransactionCount = 0, // Processing not complete yet
-                        StatusCode = UploadStatusCode.Accepted, // 202 Accepted
-                        UploadId = fileUploadRecord.Id
-                    });
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to enqueue file for background processing. UploadId: {UploadId}", fileUploadRecord.Id);
-                    
-                    // Update FileUpload record as failed
-                    await fileUploadTrackingService.UpdateProcessingFailureAsync(
-                        fileUploadRecord.Id,
-                        $"Failed to enqueue for processing: {ex.Message}",
-                        0,
-                        cancellationToken);
-
-                    return Result<UploadResult>.Failure(
-                        "Failed to queue file for processing",
-                        CreateFailureUploadResult(UploadStatusCode.InternalServerError));
-                }
+                return Result<UploadResult>.Failure(
+                    "Failed to queue file for processing",
+                    CreateFailureUploadResult(UploadStatusCode.InternalServerError));
             }
         }
         catch (Exception ex)

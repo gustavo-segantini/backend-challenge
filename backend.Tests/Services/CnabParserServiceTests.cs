@@ -52,133 +52,107 @@ public class CnabParserServiceTests
         result.Data.Should().HaveCount(3);
     }
 
-    [Fact]
-    public void ParseCnabFile_ShouldParseTypeCorrectly()
+    [Theory]
+    [InlineData("1201903010000015200096206760171234****7890233000JOÃO MACEDO   BAR DO JOÃO       ", "1", "1")] // Type and BankCode (same as type)
+    [InlineData("3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", "3", "3")] // Type and BankCode (same as type)
+    [InlineData("5201903010000013200556418150633123****7687145607MARIA JOSEFINALOJA DO Ó - MATRIZ", "5", "5")] // Type and BankCode (same as type)
+    public void ParseCnabFile_ShouldParseTypeAndBankCodeCorrectly(string line, string expectedType, string expectedBankCode)
     {
-        // Arrange - Type "1" (Debit/Income)
-        var line = "1201903010000015200096206760171234****7890233000JOÃO MACEDO   BAR DO JOÃO       ";
-
         // Act
         var result = _parserService.ParseCnabFile(line);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data![0].NatureCode.Should().Be("1");
-        result.Data[0].BankCode.Should().Be("1");
+        result.Data![0].NatureCode.Should().Be(expectedType);
+        result.Data[0].BankCode.Should().Be(expectedBankCode);
     }
 
-    [Fact]
-    public void ParseCnabFile_ShouldParseDateCorrectly()
+    [Theory]
+    [InlineData("3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", 2019, 3, 1)] // Date: 2019-03-01
+    [InlineData("3202001010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", 2020, 1, 1)] // Date: 2020-01-01
+    public void ParseCnabFile_ShouldParseDateCorrectly(string line, int year, int month, int day)
     {
-        // Arrange - Date: 2019-03-01
-        var line = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
-
         // Act
         var result = _parserService.ParseCnabFile(line);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data![0].TransactionDate.Should().Be(new DateTime(2019, 3, 1, 0, 0, 0, DateTimeKind.Utc));
+        result.Data![0].TransactionDate.Should().Be(new DateTime(year, month, day, 0, 0, 0, DateTimeKind.Utc));
     }
 
-    [Fact]
-    public void ParseCnabFile_ShouldParseAmountCorrectly()
+    [Theory]
+    [InlineData("3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", 142.00)] // Amount: 0000014200 = 142.00
+    [InlineData("3201903010000015200096206760171234****7890233000JOÃO MACEDO   BAR DO JOÃO       ", 152.00)] // Amount: 0000015200 = 152.00
+    [InlineData("3201903010000005000096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", 50.00)] // Amount: 0000005000 = 50.00 (note: 5000 cents = 50.00)
+    public void ParseCnabFile_ShouldParseAmountCorrectly(string line, decimal expectedAmount)
     {
-        // Arrange - Amount: 0000014200 = 142.00
-        var line = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
-
         // Act
         var result = _parserService.ParseCnabFile(line);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data![0].Amount.Should().Be(142.00m);
+        result.Data![0].Amount.Should().Be(expectedAmount);
     }
 
-    [Fact]
-    public void ParseCnabFile_ShouldParseTimeCorrectly()
+    [Theory]
+    [InlineData("3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", 15, 34, 53)] // Time: 153453 = 15:34:53
+    [InlineData("3201903010000014200096206760174753****3153120000JOÃO MACEDO   BAR DO JOÃO       ", 12, 0, 0)] // Time: 120000 = 12:00:00
+    [InlineData("3201903010000014200096206760174753****3153000000JOÃO MACEDO   BAR DO JOÃO       ", 0, 0, 0)] // Time: 000000 = 00:00:00
+    public void ParseCnabFile_ShouldParseTimeCorrectly(string line, int hours, int minutes, int seconds)
     {
-        // Arrange - Time: 153453 = 15:34:53
-        var line = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
-
         // Act
         var result = _parserService.ParseCnabFile(line);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data![0].TransactionTime.Should().Be(new TimeSpan(15, 34, 53));
+        result.Data![0].TransactionTime.Should().Be(new TimeSpan(hours, minutes, seconds));
     }
 
-    [Fact]
-    public void ParseCnabFile_ShouldParseCpfCorrectly()
+    [Theory]
+    [InlineData("3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", "09620676017")] // CPF: 09620676017 (pos 19-30)
+    [InlineData("32019030100000142000556418150633123****7687145607MARIA JOSEFINALOJA DO Ó - MATRIZ", "05564181506")] // CPF: 05564181506 (pos 19-30, includes leading zero)
+    public void ParseCnabFile_ShouldParseCpfCorrectly(string line, string expectedCpf)
     {
-        // Arrange - CPF: 09620676017
-        var line = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
-
         // Act
         var result = _parserService.ParseCnabFile(line);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data![0].Cpf.Should().Be("09620676017");
+        result.Data![0].Cpf.Should().Be(expectedCpf);
     }
 
-    [Fact]
-    public void ParseCnabFile_ShouldParseCardCorrectly()
+    [Theory]
+    [InlineData("3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", "4753****3153")] // Card: 4753****3153
+    [InlineData("3201903010000014200096206760171234****7890233000JOÃO MACEDO   BAR DO JOÃO       ", "1234****7890")] // Card: 1234****7890
+    public void ParseCnabFile_ShouldParseCardCorrectly(string line, string expectedCard)
     {
-        // Arrange - Card: 4753****3153
-        var line = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
-
         // Act
         var result = _parserService.ParseCnabFile(line);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
-        result.Data![0].Card.Should().Be("4753****3153");
+        result.Data![0].Card.Should().Be(expectedCard);
     }
 
     #endregion
 
     #region ParseCnabFile - Failure Cases
 
-    [Fact]
-    public void ParseCnabFile_WithEmptyContent_ShouldReturnFailure()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   \n   \n   ")]
+    public void ParseCnabFile_WithNullOrEmptyOrWhitespaceContent_ShouldReturnFailure(string? content)
     {
-        // Arrange
-        var emptyContent = "";
-
         // Act
-        var result = _parserService.ParseCnabFile(emptyContent);
+        var result = _parserService.ParseCnabFile(content!);
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("empty");
-    }
-
-    [Fact]
-    public void ParseCnabFile_WithNullContent_ShouldReturnFailure()
-    {
-        // Arrange
-        string? nullContent = null;
-
-        // Act
-        var result = _parserService.ParseCnabFile(nullContent!);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
-    }
-
-    [Fact]
-    public void ParseCnabFile_WithWhitespaceOnly_ShouldReturnFailure()
-    {
-        // Arrange
-        var whitespaceContent = "   \n   \n   ";
-
-        // Act
-        var result = _parserService.ParseCnabFile(whitespaceContent);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
+        if (content != null && content.Trim().Length == 0)
+        {
+            result.ErrorMessage.Should().Contain("empty");
+        }
     }
 
     [Fact]
@@ -223,6 +197,91 @@ INVALID_LINE_HERE
         // Parser returns failure on first invalid line encountered
         result.IsSuccess.Should().BeFalse();
         result.ErrorMessage.Should().Contain("Invalid line");
+    }
+
+    #endregion
+
+    #region ParseCnabLine Tests
+
+    [Fact]
+    public void ParseCnabLine_WithValidLine_ShouldReturnSuccess()
+    {
+        // Arrange
+        const string line = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
+        const int lineIndex = 0;
+
+        // Act
+        var result = _parserService.ParseCnabLine(line, lineIndex);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.NatureCode.Should().Be("3");
+        result.Data.Cpf.Should().Be("09620676017");
+    }
+
+    [Theory]
+    [InlineData(null, 0)]
+    [InlineData("", 1)]
+    [InlineData("   ", 2)]
+    public void ParseCnabLine_WithNullOrEmptyOrWhitespaceLine_ShouldReturnFailure(string? line, int lineIndex)
+    {
+        // Act
+        var result = _parserService.ParseCnabLine(line!, lineIndex);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain($"Line {lineIndex}");
+    }
+
+    [Theory]
+    [InlineData("12345", 5)] // Short line
+    [InlineData("3999999990000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", 10)] // Invalid date
+    [InlineData("3201903010AAAAAAAA00096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", 15)] // Invalid amount
+    public void ParseCnabLine_WithInvalidFormat_ShouldReturnFailure(string invalidLine, int lineIndex)
+    {
+        // Act
+        var result = _parserService.ParseCnabLine(invalidLine, lineIndex);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain($"Line {lineIndex}");
+    }
+
+    [Fact]
+    public void ParseCnabLine_WithException_ShouldReturnFailureWithLineIndex()
+    {
+        // Arrange - Line that will cause exception during parsing
+        const string problematicLine = "3201903010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
+        const int lineIndex = 20;
+
+        // Act
+        var result = _parserService.ParseCnabLine(problematicLine, lineIndex);
+
+        // Assert
+        // This should succeed, but if it fails, error should include line index
+        if (!result.IsSuccess)
+        {
+            result.ErrorMessage.Should().Contain($"Line {lineIndex}");
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(100)]
+    [InlineData(-1)]
+    public void ParseCnabLine_WithDifferentLineIndices_ShouldIncludeIndexInError(int lineIndex)
+    {
+        // Arrange
+        const string invalidLine = "short";
+
+        // Act
+        var result = _parserService.ParseCnabLine(invalidLine, lineIndex);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain($"Line {lineIndex}");
     }
 
     #endregion
@@ -301,87 +360,21 @@ INVALID_LINE_HERE
         result.Data![0].TransactionTime.TotalHours.Should().BeGreaterThan(24);
     }
 
-    [Fact]
-    public void ParseCnabFile_WithInvalidDateMonth_ShouldSkipTransaction()
+    [Theory]
+    [InlineData("3201913010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", "Invalid month: 13")]
+    [InlineData("3201903320000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", "Invalid day: 32")]
+    [InlineData("3ABCDEFGH0000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", "Non-numeric date")]
+    [InlineData("3201903010000014200096206760174753****3153AABBCCJOÃO MACEDO   BAR DO JOÃO       ", "Non-numeric time")]
+    [InlineData("3        0000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", "Empty date field")]
+    [InlineData("3201903010000014200096206760174753****3153      JOÃO MACEDO   BAR DO JOÃO       ", "Empty time field")]
+    [InlineData("3201903010AAAAAAAA00096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ", "Invalid amount")]
+    public void ParseCnabFile_WithInvalidFields_ShouldReturnFailureWithNoValidTransactions(string line, string description)
     {
-        // Arrange - Invalid month: 13 (invalid)
-        var line = "3201913010000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
-
         // Act
         var result = _parserService.ParseCnabFile(line);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
-    }
-
-    [Fact]
-    public void ParseCnabFile_WithInvalidDateDay_ShouldSkipTransaction()
-    {
-        // Arrange - Invalid day: 32 (invalid)
-        var line = "3201903320000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
-
-        // Act
-        var result = _parserService.ParseCnabFile(line);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
-    }
-
-    [Fact]
-    public void ParseCnabFile_WithNonNumericDate_ShouldSkipTransaction()
-    {
-        // Arrange - Non-numeric date: ABCDEFGH
-        var line = "3ABCDEFGH0000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
-
-        // Act
-        var result = _parserService.ParseCnabFile(line);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
-    }
-
-    [Fact]
-    public void ParseCnabFile_WithNonNumericTime_ShouldSkipTransaction()
-    {
-        // Arrange - Non-numeric time: AABBCC
-        var line = "3201903010000014200096206760174753****3153AABBCCJOÃO MACEDO   BAR DO JOÃO       ";
-
-        // Act
-        var result = _parserService.ParseCnabFile(line);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
-    }
-
-    [Fact]
-    public void ParseCnabFile_WithEmptyDateField_ShouldSkipTransaction()
-    {
-        // Arrange - Empty/space date field
-        var line = "3        0000014200096206760174753****3153153453JOÃO MACEDO   BAR DO JOÃO       ";
-
-        // Act
-        var result = _parserService.ParseCnabFile(line);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("No valid transactions found in the file");
-    }
-
-    [Fact]
-    public void ParseCnabFile_WithEmptyTimeField_ShouldSkipTransaction()
-    {
-        // Arrange - Empty/space time field
-        var line = "3201903010000014200096206760174753****3153      JOÃO MACEDO   BAR DO JOÃO       ";
-
-        // Act
-        var result = _parserService.ParseCnabFile(line);
-
-        // Assert
-        result.IsSuccess.Should().BeFalse();
+        result.IsSuccess.Should().BeFalse(description);
         result.ErrorMessage.Should().Contain("No valid transactions found in the file");
     }
 

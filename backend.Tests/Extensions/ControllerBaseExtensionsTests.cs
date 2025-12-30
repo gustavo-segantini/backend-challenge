@@ -269,20 +269,19 @@ public class ControllerBaseExtensionsTests
         response.Status.Should().Be(404);
     }
 
-    [Fact]
-    public void Problem_WithDifferentStatusCodes_ReturnsCorrectStatusCode()
+    [Theory]
+    [InlineData(400)]
+    [InlineData(404)]
+    [InlineData(409)]
+    [InlineData(500)]
+    [InlineData(503)]
+    public void Problem_WithDifferentStatusCodes_ReturnsCorrectStatusCode(int statusCode)
     {
-        // Test multiple status codes
-        var statusCodes = new[] { 400, 404, 409, 500, 503 };
+        // Act
+        var result = _controller.Problem("Error", "Details", statusCode);
 
-        foreach (var statusCode in statusCodes)
-        {
-            // Act
-            var result = _controller.Problem("Error", "Details", statusCode);
-
-            // Assert
-            result.StatusCode.Should().Be(statusCode);
-        }
+        // Assert
+        result.StatusCode.Should().Be(statusCode);
     }
 
     #endregion

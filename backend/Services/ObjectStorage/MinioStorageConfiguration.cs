@@ -1,8 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace CnabApi.Services.ObjectStorage;
 
 /// <summary>
 /// Configuration for MinIO object storage.
 /// </summary>
+[ExcludeFromCodeCoverage] // Configuration class - no business logic to test
 public class MinioStorageConfiguration
 {
     /// <summary>

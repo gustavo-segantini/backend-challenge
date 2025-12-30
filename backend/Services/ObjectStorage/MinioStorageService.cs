@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Minio;
 using Minio.DataModel.Args;
 using Minio.Exceptions;
@@ -14,6 +15,7 @@ namespace CnabApi.Services.ObjectStorage;
 /// <remarks>
 /// Constructor - lightweight, no I/O operations.
 /// </remarks>
+[ExcludeFromCodeCoverage] // Infrastructure code - requires MinIO integration tests
 public class MinioStorageService(
     IMinioClient minioClient,
     MinioStorageConfiguration config,

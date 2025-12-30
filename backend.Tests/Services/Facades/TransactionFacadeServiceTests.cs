@@ -5,7 +5,6 @@ using CnabApi.Services.Facades;
 using CnabApi.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System.Text;
@@ -22,8 +21,6 @@ public class TransactionFacadeServiceTests
     private readonly Mock<IFileUploadTrackingService> _fileUploadTrackingServiceMock;
     private readonly Mock<IObjectStorageService> _objectStorageServiceMock;
     private readonly Mock<IUploadQueueService> _uploadQueueServiceMock;
-    private readonly Mock<ICnabUploadService> _cnabUploadServiceMock;
-    private readonly Mock<IHostEnvironment> _hostEnvironmentMock;
     private readonly Mock<IHashService> _hashServiceMock;
     private readonly CnabApi.Services.StatusCodes.UploadStatusCodeStrategyFactory _statusCodeFactory;
     private readonly Mock<ILogger<TransactionFacadeService>> _loggerMock;
@@ -36,8 +33,6 @@ public class TransactionFacadeServiceTests
         _fileUploadTrackingServiceMock = new Mock<IFileUploadTrackingService>();
         _objectStorageServiceMock = new Mock<IObjectStorageService>();
         _uploadQueueServiceMock = new Mock<IUploadQueueService>();
-        _cnabUploadServiceMock = new Mock<ICnabUploadService>();
-        _hostEnvironmentMock = new Mock<IHostEnvironment>();
         _hashServiceMock = new Mock<IHashService>();
         _statusCodeFactory = new CnabApi.Services.StatusCodes.UploadStatusCodeStrategyFactory();
         _loggerMock = new Mock<ILogger<TransactionFacadeService>>();
@@ -53,10 +48,8 @@ public class TransactionFacadeServiceTests
             _fileUploadTrackingServiceMock.Object,
             _objectStorageServiceMock.Object,
             _uploadQueueServiceMock.Object,
-            _cnabUploadServiceMock.Object,
             _hashServiceMock.Object,
             _statusCodeFactory,
-            _hostEnvironmentMock.Object,
             _loggerMock.Object
         );
     }
@@ -258,6 +251,148 @@ public class TransactionFacadeServiceTests
         // Assert
         result.IsSuccess.Should().BeFalse();
         result.Data!.StatusCode.Should().Be(UploadStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UploadCnabFileAsync_WithDuplicateFile_ShouldReturnConflict()
+    {
+        // Arrange
+        var request = CreateMockHttpRequest();
+        var fileContent = "Duplicate CNAB content";
+        var fileHash = "duplicate-hash-123";
+        var existingUpload = new FileUpload
+        {
+            Id = Guid.NewGuid(),
+            FileName = "previous.txt",
+            FileHash = fileHash,
+            ProcessedLineCount = 10,
+            Status = FileUploadStatus.Success
+        };
+
+        _fileUploadServiceMock
+            .Setup(x => x.ReadCnabFileFromMultipartAsync(It.IsAny<Microsoft.AspNetCore.WebUtilities.MultipartReader>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<string>.Success(fileContent));
+
+        _hashServiceMock
+            .Setup(x => x.ComputeFileHash(fileContent))
+            .Returns(fileHash);
+
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.IsFileUniqueAsync(fileHash, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((false, existingUpload));
+
+        // Act
+        var result = await _service.UploadCnabFileAsync(request, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.Data!.StatusCode.Should().Be(UploadStatusCode.Conflict);
+        result.ErrorMessage.Should().Contain("já foi processado anteriormente");
+    }
+
+    [Fact]
+    public async Task UploadCnabFileAsync_WithUniqueFile_ShouldProceedWithUpload()
+    {
+        // Arrange
+        var request = CreateMockHttpRequest();
+        var fileContent = "Unique CNAB content";
+        var fileHash = "unique-hash-123";
+        var fileUploadId = Guid.NewGuid();
+
+        _fileUploadServiceMock
+            .Setup(x => x.ReadCnabFileFromMultipartAsync(It.IsAny<Microsoft.AspNetCore.WebUtilities.MultipartReader>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<string>.Success(fileContent));
+
+        _hashServiceMock
+            .Setup(x => x.ComputeFileHash(fileContent))
+            .Returns(fileHash);
+
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.IsFileUniqueAsync(fileHash, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, null));
+
+        _objectStorageServiceMock
+            .Setup(x => x.UploadFileAsync(It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("http://minio/storage-path.txt");
+
+        var fileUpload = new FileUpload
+        {
+            Id = fileUploadId,
+            FileName = "test.txt",
+            FileHash = fileHash,
+            FileSize = 100,
+            Status = FileUploadStatus.Pending
+        };
+
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.RecordPendingUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fileUpload);
+
+        _uploadQueueServiceMock
+            .Setup(x => x.EnqueueUploadAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("message-id");
+
+        // Act
+        var result = await _service.UploadCnabFileAsync(request, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        _fileUploadTrackingServiceMock.Verify(
+            x => x.IsFileUniqueAsync(fileHash, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task UploadCnabFileAsync_WhenObjectStorageFails_ShouldContinueWithUpload()
+    {
+        // Arrange
+        var request = CreateMockHttpRequest();
+        var fileContent = "CNAB content";
+        var fileHash = "hash-123";
+        var fileUploadId = Guid.NewGuid();
+
+        _fileUploadServiceMock
+            .Setup(x => x.ReadCnabFileFromMultipartAsync(It.IsAny<Microsoft.AspNetCore.WebUtilities.MultipartReader>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<string>.Success(fileContent));
+
+        _hashServiceMock
+            .Setup(x => x.ComputeFileHash(fileContent))
+            .Returns(fileHash);
+
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.IsFileUniqueAsync(fileHash, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, null));
+
+        // Object storage fails - throws exception
+        _objectStorageServiceMock
+            .Setup(x => x.UploadFileAsync(It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Object storage failure"));
+
+        var fileUpload = new FileUpload
+        {
+            Id = fileUploadId,
+            FileName = "test.txt",
+            FileHash = fileHash,
+            FileSize = 100,
+            Status = FileUploadStatus.Pending
+        };
+
+        _fileUploadTrackingServiceMock
+            .Setup(x => x.RecordPendingUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fileUpload);
+
+        _uploadQueueServiceMock
+            .Setup(x => x.EnqueueUploadAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("message-id");
+
+        // Act
+        var result = await _service.UploadCnabFileAsync(request, CancellationToken.None);
+
+        // Assert - Should continue even if storage fails
+        result.IsSuccess.Should().BeTrue();
+        _fileUploadTrackingServiceMock.Verify(
+            x => x.RecordPendingUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     #endregion

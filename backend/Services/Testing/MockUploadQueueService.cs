@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using CnabApi.Services.Interfaces;
 using System.Collections.Concurrent;
 
@@ -7,6 +8,7 @@ namespace CnabApi.Services.Testing;
 /// Mock implementation of IUploadQueueService for testing environments.
 /// Provides in-memory queue functionality without requiring Redis.
 /// </summary>
+[ExcludeFromCodeCoverage] // Testing infrastructure - not part of business logic
 public class MockUploadQueueService : IUploadQueueService
 {
     private readonly ConcurrentQueue<(string MessageId, Guid UploadId, string StoragePath)> _queue = new();

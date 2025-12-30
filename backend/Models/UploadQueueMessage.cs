@@ -1,9 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace CnabApi.Models;
 
 /// <summary>
 /// Message model for upload queue in Redis Streams.
 /// Contains all information needed to process the upload in the background.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class UploadQueueMessage
 {
     /// <summary>

@@ -1,8 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace CnabApi.Models;
 
 /// <summary>
 /// Query options for transaction listings.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class TransactionQueryOptions
 {
     public string Cpf { get; set; } = string.Empty;

@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace CnabApi.Services.Interfaces;
 
 /// <summary>
@@ -70,6 +72,8 @@ public interface IUploadQueueService
 /// <summary>
 /// Statistics about the upload queue.
 /// </summary>
+
+[ExcludeFromCodeCoverage]
 public class UploadQueueStats
 {
     public long PendingMessages { get; set; }

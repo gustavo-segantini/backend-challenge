@@ -143,6 +143,129 @@ public class TransactionServiceTests : IDisposable
 
     #endregion
 
+    #region AddSingleTransactionAsync Tests
+
+    [Fact]
+    public async Task AddSingleTransactionAsync_WithValidTransaction_ShouldSaveToDatabase()
+    {
+        // Arrange
+        var transaction = CreateTransaction("1", 100m, "11144477735");
+        transaction.IdempotencyKey = "unique-key-1";
+
+        // Act
+        var result = await _transactionService.AddSingleTransactionAsync(transaction);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        
+        var saved = await _context.Transactions.FirstOrDefaultAsync();
+        saved.Should().NotBeNull();
+        saved!.IdempotencyKey.Should().Be("unique-key-1");
+    }
+
+    [Fact]
+    public async Task AddSingleTransactionAsync_WithNullTransaction_ShouldReturnFailure()
+    {
+        // Act
+        var result = await _transactionService.AddSingleTransactionAsync(null!);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("Transaction cannot be null");
+    }
+
+    [Fact]
+    public async Task AddSingleTransactionAsync_WithDuplicateIdempotencyKey_ShouldReturnFailure()
+    {
+        // Arrange
+        var transaction1 = CreateTransaction("1", 100m, "11144477735");
+        transaction1.IdempotencyKey = "duplicate-key";
+        await _transactionService.AddSingleTransactionAsync(transaction1);
+
+        var transaction2 = CreateTransaction("2", 200m, "22222222222");
+        transaction2.IdempotencyKey = "duplicate-key"; // Same key
+
+        // Act
+        var result = await _transactionService.AddSingleTransactionAsync(transaction2);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("Transaction already exists");
+    }
+
+    #endregion
+
+    #region AddTransactionToContextAsync Tests
+
+    [Fact]
+    public async Task AddTransactionToContextAsync_WithValidTransaction_ShouldAddToContext()
+    {
+        // Arrange
+        var transaction = CreateTransaction("1", 100m, "11144477735");
+        transaction.IdempotencyKey = "context-key-1";
+
+        // Act
+        var result = await _transactionService.AddTransactionToContextAsync(transaction);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        
+        // Should be in context but not saved yet
+        var inContext = _context.ChangeTracker.Entries<Transaction>()
+            .FirstOrDefault(e => e.Entity.IdempotencyKey == "context-key-1");
+        inContext.Should().NotBeNull();
+        inContext!.State.Should().Be(EntityState.Added);
+    }
+
+    [Fact]
+    public async Task AddTransactionToContextAsync_WithNullTransaction_ShouldReturnFailure()
+    {
+        // Act
+        var result = await _transactionService.AddTransactionToContextAsync(null!);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("Transaction cannot be null");
+    }
+
+    [Fact]
+    public async Task AddTransactionToContextAsync_WithDuplicateIdempotencyKey_ShouldReturnFailure()
+    {
+        // Arrange
+        var transaction1 = CreateTransaction("1", 100m, "11144477735");
+        transaction1.IdempotencyKey = "duplicate-context-key";
+        await _transactionService.AddSingleTransactionAsync(transaction1);
+
+        var transaction2 = CreateTransaction("2", 200m, "22222222222");
+        transaction2.IdempotencyKey = "duplicate-context-key"; // Same key
+
+        // Act
+        var result = await _transactionService.AddTransactionToContextAsync(transaction2);
+
+        // Assert
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("Transaction already exists");
+    }
+
+    [Fact]
+    public async Task AddTransactionToContextAsync_ShouldNotSaveChanges()
+    {
+        // Arrange
+        var transaction = CreateTransaction("1", 100m, "11144477735");
+        transaction.IdempotencyKey = "no-save-key";
+
+        // Act
+        await _transactionService.AddTransactionToContextAsync(transaction);
+
+        // Assert - Should not be saved to database yet
+        var saved = await _context.Transactions.FirstOrDefaultAsync();
+        saved.Should().BeNull();
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static Transaction CreateTransaction(string natureCode, decimal amount, string cpf)
@@ -155,7 +278,10 @@ public class TransactionServiceTests : IDisposable
             Card = "1234****5678",
             TransactionDate = DateTime.UtcNow,
             TransactionTime = new TimeSpan(12, 0, 0),
-            BankCode = natureCode
+            BankCode = natureCode,
+            StoreOwner = "Test Owner",
+            StoreName = "Test Store",
+            IdempotencyKey = Guid.NewGuid().ToString()
         };
     }
 

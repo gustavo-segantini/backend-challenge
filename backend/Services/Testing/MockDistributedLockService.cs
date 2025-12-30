@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using CnabApi.Services.Interfaces;
 
 namespace CnabApi.Services.Testing;
@@ -6,6 +7,7 @@ namespace CnabApi.Services.Testing;
 /// Mock implementation of IDistributedLockService for testing environments.
 /// Provides in-memory lock functionality without requiring Redis.
 /// </summary>
+[ExcludeFromCodeCoverage] // Testing infrastructure - not part of business logic
 public class MockDistributedLockService : IDistributedLockService
 {
     private readonly Dictionary<string, string> _locks = [];

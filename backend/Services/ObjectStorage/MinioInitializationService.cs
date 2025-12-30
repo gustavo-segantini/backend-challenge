@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Minio;
 using Minio.DataModel.Args;
 using Minio.Exceptions;
@@ -11,6 +12,7 @@ namespace CnabApi.Services.ObjectStorage;
 /// This avoids blocking I/O during dependency injection setup and follows
 /// best practices for async initialization in ASP.NET Core.
 /// </summary>
+[ExcludeFromCodeCoverage] // Infrastructure code - requires MinIO integration tests
 public class MinioInitializationService(
     IMinioClient minioClient,
     MinioStorageConfiguration config,

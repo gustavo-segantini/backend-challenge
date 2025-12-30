@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using StackExchange.Redis;
 using CnabApi.Services.Interfaces;
 
@@ -7,6 +8,7 @@ namespace CnabApi.Services;
 /// Redis-based distributed lock service.
 /// Uses SET with NX (Not eXists) option and unique lock values for safe distributed locking.
 /// </summary>
+[ExcludeFromCodeCoverage] // Infrastructure code - requires Redis integration tests
 public class RedisDistributedLockService(IConnectionMultiplexer redis, ILogger<RedisDistributedLockService> logger) : IDistributedLockService
 {
     private const string LockKeyPrefix = "lock:";

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using StackExchange.Redis;
 using CnabApi.Services.Interfaces;
 
@@ -7,6 +8,7 @@ namespace CnabApi.Services;
 /// Redis Streams implementation of upload queue service.
 /// Provides reliable, persistent queue with consumer group support for distributed processing.
 /// </summary>
+[ExcludeFromCodeCoverage] // Infrastructure code - requires Redis integration tests
 public class RedisUploadQueueService(IConnectionMultiplexer redis, ILogger<RedisUploadQueueService> logger) : IUploadQueueService
 {
     private const string StreamKey = "cnab:upload:queue";

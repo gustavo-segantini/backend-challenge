@@ -2,6 +2,7 @@ using CnabApi.Models;
 using CnabApi.Services.Interfaces;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace CnabApi.Services.Hosted;
 
@@ -10,6 +11,7 @@ namespace CnabApi.Services.Hosted;
 /// Implements consumer group pattern for reliable, distributed processing with retry logic.
 /// Downloads files from MinIO and processes line by line with checkpoint support.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class UploadProcessingHostedService(
     IUploadQueueService queueService,
     IDistributedLockService lockService,

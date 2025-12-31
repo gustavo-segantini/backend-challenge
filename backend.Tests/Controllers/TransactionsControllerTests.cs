@@ -739,17 +739,29 @@ public class TransactionsControllerTests
             }
         };
 
+        var pagedResponse = new PagedResponse<StoreGroupedTransactions>
+        {
+            Items = groupedTransactions,
+            TotalCount = 1,
+            Page = 1,
+            PageSize = 50,
+            TotalPages = 1
+        };
+
         _facadeServiceMock
-            .Setup(x => x.GetTransactionsGroupedByStoreAsync(uploadId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<List<StoreGroupedTransactions>>.Success(groupedTransactions));
+            .Setup(x => x.GetTransactionsGroupedByStoreAsync(uploadId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<PagedResponse<StoreGroupedTransactions>>.Success(pagedResponse));
 
         // Act
-        var result = await _controller.GetTransactionsGroupedByStore(uploadId, CancellationToken.None);
+        var result = await _controller.GetTransactionsGroupedByStore(uploadId, 1, 50, CancellationToken.None);
 
         // Assert
         var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var value = okResult.Value;
-        value.Should().BeEquivalentTo(groupedTransactions);
+        var value = okResult.Value.Should().BeOfType<PagedResponse<StoreGroupedTransactions>>().Subject;
+        value.Items.Should().BeEquivalentTo(groupedTransactions);
+        value.TotalCount.Should().Be(1);
+        value.Page.Should().Be(1);
+        value.PageSize.Should().Be(50);
     }
 
     [Fact]
@@ -759,11 +771,11 @@ public class TransactionsControllerTests
         var uploadId = Guid.NewGuid();
 
         _facadeServiceMock
-            .Setup(x => x.GetTransactionsGroupedByStoreAsync(uploadId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<List<StoreGroupedTransactions>>.Failure("Error getting transactions"));
+            .Setup(x => x.GetTransactionsGroupedByStoreAsync(uploadId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<PagedResponse<StoreGroupedTransactions>>.Failure("Error getting transactions"));
 
         // Act
-        var result = await _controller.GetTransactionsGroupedByStore(uploadId, CancellationToken.None);
+        var result = await _controller.GetTransactionsGroupedByStore(uploadId, 1, 50, CancellationToken.None);
 
         // Assert
         var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
@@ -778,12 +790,21 @@ public class TransactionsControllerTests
         // Arrange
         var uploadId = Guid.NewGuid();
 
+        var emptyPagedResponse = new PagedResponse<StoreGroupedTransactions>
+        {
+            Items = new List<StoreGroupedTransactions>(),
+            TotalCount = 0,
+            Page = 1,
+            PageSize = 50,
+            TotalPages = 0
+        };
+
         _facadeServiceMock
-            .Setup(x => x.GetTransactionsGroupedByStoreAsync(uploadId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<List<StoreGroupedTransactions>>.Success(new List<StoreGroupedTransactions>()));
+            .Setup(x => x.GetTransactionsGroupedByStoreAsync(uploadId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<PagedResponse<StoreGroupedTransactions>>.Success(emptyPagedResponse));
 
         // Act
-        var result = await _controller.GetTransactionsGroupedByStore(uploadId, CancellationToken.None);
+        var result = await _controller.GetTransactionsGroupedByStore(uploadId, 1, 50, CancellationToken.None);
 
         // Assert
         var notFoundResult = result.Result.Should().BeOfType<NotFoundObjectResult>().Subject;
@@ -799,11 +820,11 @@ public class TransactionsControllerTests
         var uploadId = Guid.NewGuid();
 
         _facadeServiceMock
-            .Setup(x => x.GetTransactionsGroupedByStoreAsync(uploadId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<List<StoreGroupedTransactions>>.Success(null!));
+            .Setup(x => x.GetTransactionsGroupedByStoreAsync(uploadId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<PagedResponse<StoreGroupedTransactions>>.Success(null!));
 
         // Act
-        var result = await _controller.GetTransactionsGroupedByStore(uploadId, CancellationToken.None);
+        var result = await _controller.GetTransactionsGroupedByStore(uploadId, 1, 50, CancellationToken.None);
 
         // Assert
         var notFoundResult = result.Result.Should().BeOfType<NotFoundObjectResult>().Subject;

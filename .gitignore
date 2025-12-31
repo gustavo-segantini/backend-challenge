@@ -34,6 +34,8 @@ frontend/.env.*.local
 .env.local
 .env.*.local
 .env.production.local
+# Allow .env.example to be tracked (it's a template)
+!.env.example
 
 .serena/.gitignore
 .serena/project.yml

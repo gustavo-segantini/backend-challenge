@@ -30,9 +30,13 @@ public interface ITransactionFacadeService
     /// Gets transactions grouped by store name and owner, with balance calculated for each store.
     /// </summary>
     /// <param name="uploadId">Optional upload ID to filter transactions by a specific file upload.</param>
+    /// <param name="page">Page number (1-based). Default: 1.</param>
+    /// <param name="pageSize">Number of items per page. Default: 50.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Result with list of grouped transactions by store.</returns>
-    Task<Result<List<StoreGroupedTransactions>>> GetTransactionsGroupedByStoreAsync(
+    /// <returns>Result with paginated list of grouped transactions by store.</returns>
+    Task<Result<Models.Responses.PagedResponse<StoreGroupedTransactions>>> GetTransactionsGroupedByStoreAsync(
         Guid? uploadId = null,
+        int page = 1,
+        int pageSize = 50,
         CancellationToken cancellationToken = default);
 }

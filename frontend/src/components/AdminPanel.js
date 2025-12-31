@@ -18,6 +18,9 @@ function AdminPanel({ userInfo }) {
   const [selectedUpload, setSelectedUpload] = useState(null);
   const [groupedTransactions, setGroupedTransactions] = useState([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const [transactionsTotalPages, setTransactionsTotalPages] = useState(1);
+  const [transactionsTotalCount, setTransactionsTotalCount] = useState(0);
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -151,23 +154,36 @@ function AdminPanel({ userInfo }) {
     if (upload.status === 'Success') {
       setSelectedUploadId(upload.id);
       setSelectedUpload(upload);
-      await loadTransactionsForUpload(upload.id);
+      setTransactionsPage(1); // Reset to first page when selecting new upload
+      await loadTransactionsForUpload(upload.id, 1);
     } else {
       setSelectedUploadId(null);
       setSelectedUpload(null);
       setGroupedTransactions([]);
+      setTransactionsPage(1);
+      setTransactionsTotalPages(1);
+      setTransactionsTotalCount(0);
     }
   };
 
-  const loadTransactionsForUpload = async (uploadId) => {
+  const loadTransactionsForUpload = async (uploadId, page = 1) => {
     try {
       setLoadingTransactions(true);
       setError(null);
-      const response = await api.get(`/transactions/stores/${uploadId}`);
-      setGroupedTransactions(response.data || []);
+      const response = await api.get(`/transactions/stores/${uploadId}`, {
+        params: { page, pageSize: 50 }
+      });
+      // Backend now returns PagedResponse with items array
+      const pagedData = response.data || {};
+      setGroupedTransactions(pagedData.items || []);
+      setTransactionsTotalPages(pagedData.totalPages || 1);
+      setTransactionsTotalCount(pagedData.totalCount || 0);
+      setTransactionsPage(page);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load transactions');
       setGroupedTransactions([]);
+      setTransactionsTotalPages(1);
+      setTransactionsTotalCount(0);
     } finally {
       setLoadingTransactions(false);
     }
@@ -499,7 +515,38 @@ function AdminPanel({ userInfo }) {
           {loadingTransactions ? (
             <Spinner />
           ) : (
-            <StoreGroupedTransactions stores={groupedTransactions} />
+            <>
+              <StoreGroupedTransactions stores={groupedTransactions} />
+              {/* Pagination for transactions */}
+              {transactionsTotalPages > 1 && (
+                <div className="pagination" style={{ marginTop: '20px' }}>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => {
+                      const newPage = Math.max(1, transactionsPage - 1);
+                      loadTransactionsForUpload(selectedUploadId, newPage);
+                    }}
+                    disabled={transactionsPage === 1 || loadingTransactions}
+                  >
+                    Previous
+                  </button>
+                  <span className="page-info">
+                    Page {transactionsPage} of {transactionsTotalPages} 
+                    {transactionsTotalCount > 0 && ` (${transactionsTotalCount} stores)`}
+                  </span>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => {
+                      const newPage = Math.min(transactionsTotalPages, transactionsPage + 1);
+                      loadTransactionsForUpload(selectedUploadId, newPage);
+                    }}
+                    disabled={transactionsPage === transactionsTotalPages || loadingTransactions}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

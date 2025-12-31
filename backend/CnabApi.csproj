@@ -44,6 +44,7 @@
     <PackageReference Include="Scrutor" Version="4.2.2" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.9.0" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+    <PackageReference Include="AspNetCoreRateLimit" Version="5.0.0" />
   </ItemGroup>
 
 </Project>

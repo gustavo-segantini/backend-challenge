@@ -20,9 +20,9 @@ public class TransactionFacadeServiceTests
     private readonly Mock<IFileUploadService> _fileUploadServiceMock;
     private readonly Mock<IFileUploadTrackingService> _fileUploadTrackingServiceMock;
     private readonly Mock<IObjectStorageService> _objectStorageServiceMock;
-    private readonly Mock<IUploadQueueService> _uploadQueueServiceMock;
     private readonly Mock<IHashService> _hashServiceMock;
     private readonly CnabApi.Services.StatusCodes.UploadStatusCodeStrategyFactory _statusCodeFactory;
+    private readonly Mock<IUploadProcessingStrategy> _uploadProcessingStrategyMock;
     private readonly Mock<ILogger<TransactionFacadeService>> _loggerMock;
     private readonly TransactionFacadeService _service;
 
@@ -32,9 +32,9 @@ public class TransactionFacadeServiceTests
         _fileUploadServiceMock = new Mock<IFileUploadService>();
         _fileUploadTrackingServiceMock = new Mock<IFileUploadTrackingService>();
         _objectStorageServiceMock = new Mock<IObjectStorageService>();
-        _uploadQueueServiceMock = new Mock<IUploadQueueService>();
         _hashServiceMock = new Mock<IHashService>();
         _statusCodeFactory = new CnabApi.Services.StatusCodes.UploadStatusCodeStrategyFactory();
+        _uploadProcessingStrategyMock = new Mock<IUploadProcessingStrategy>();
         _loggerMock = new Mock<ILogger<TransactionFacadeService>>();
 
         // Setup hash service to return a mock hash
@@ -47,9 +47,9 @@ public class TransactionFacadeServiceTests
             _fileUploadServiceMock.Object,
             _fileUploadTrackingServiceMock.Object,
             _objectStorageServiceMock.Object,
-            _uploadQueueServiceMock.Object,
             _hashServiceMock.Object,
             _statusCodeFactory,
+            _uploadProcessingStrategyMock.Object,
             _loggerMock.Object
         );
     }
@@ -97,9 +97,14 @@ public class TransactionFacadeServiceTests
             .Setup(x => x.RecordPendingUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(fileUpload);
 
-        _uploadQueueServiceMock
-            .Setup(x => x.EnqueueUploadAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("message-id-123");
+        _uploadProcessingStrategyMock
+            .Setup(x => x.ProcessUploadAsync(It.IsAny<string>(), It.IsAny<FileUpload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<UploadResult>.Success(new UploadResult
+            {
+                TransactionCount = 0,
+                StatusCode = UploadStatusCode.Accepted,
+                UploadId = fileUploadId
+            }));
 
         // Act
         var result = await _service.UploadCnabFileAsync(request, CancellationToken.None);
@@ -185,9 +190,14 @@ public class TransactionFacadeServiceTests
             .Setup(x => x.RecordPendingUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(fileUpload);
 
-        _uploadQueueServiceMock
-            .Setup(x => x.EnqueueUploadAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("message-id-456");
+        _uploadProcessingStrategyMock
+            .Setup(x => x.ProcessUploadAsync(It.IsAny<string>(), It.IsAny<FileUpload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<UploadResult>.Success(new UploadResult
+            {
+                TransactionCount = 0,
+                StatusCode = UploadStatusCode.Accepted,
+                UploadId = fileUploadId
+            }));
 
         // Act
         var result = await _service.UploadCnabFileAsync(request, CancellationToken.None);
@@ -328,9 +338,14 @@ public class TransactionFacadeServiceTests
             .Setup(x => x.RecordPendingUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(fileUpload);
 
-        _uploadQueueServiceMock
-            .Setup(x => x.EnqueueUploadAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("message-id");
+        _uploadProcessingStrategyMock
+            .Setup(x => x.ProcessUploadAsync(It.IsAny<string>(), It.IsAny<FileUpload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<UploadResult>.Success(new UploadResult
+            {
+                TransactionCount = 0,
+                StatusCode = UploadStatusCode.Accepted,
+                UploadId = fileUploadId
+            }));
 
         // Act
         var result = await _service.UploadCnabFileAsync(request, CancellationToken.None);
@@ -381,9 +396,14 @@ public class TransactionFacadeServiceTests
             .Setup(x => x.RecordPendingUploadAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(fileUpload);
 
-        _uploadQueueServiceMock
-            .Setup(x => x.EnqueueUploadAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("message-id");
+        _uploadProcessingStrategyMock
+            .Setup(x => x.ProcessUploadAsync(It.IsAny<string>(), It.IsAny<FileUpload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<UploadResult>.Success(new UploadResult
+            {
+                TransactionCount = 0,
+                StatusCode = UploadStatusCode.Accepted,
+                UploadId = fileUploadId
+            }));
 
         // Act
         var result = await _service.UploadCnabFileAsync(request, CancellationToken.None);

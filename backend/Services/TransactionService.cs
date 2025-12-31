@@ -222,12 +222,19 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
     /// <summary>
     /// Gets transactions grouped by store name and owner, with balance calculated for each store.
     /// </summary>
-    public async Task<Result<List<StoreGroupedTransactions>>> GetTransactionsGroupedByStoreAsync(
+    public async Task<Result<Models.Responses.PagedResponse<StoreGroupedTransactions>>> GetTransactionsGroupedByStoreAsync(
         Guid? uploadId = null,
+        int page = 1,
+        int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            // Validate pagination parameters
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 50;
+            if (pageSize > 100) pageSize = 100; // Max page size
+
             // Build query with optional uploadId filter
             var query = _context.Transactions.AsNoTracking();
             
@@ -258,11 +265,28 @@ public class TransactionService(CnabDbContext context, IDistributedCache cache) 
                 .OrderBy(s => s.StoreName)
                 .ToList();
 
-            return Result<List<StoreGroupedTransactions>>.Success(grouped);
+            // Apply pagination
+            var totalCount = grouped.Count;
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+            var pagedItems = grouped
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            var pagedResponse = new Models.Responses.PagedResponse<StoreGroupedTransactions>
+            {
+                Items = pagedItems,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = totalPages
+            };
+
+            return Result<Models.Responses.PagedResponse<StoreGroupedTransactions>>.Success(pagedResponse);
         }
         catch (Exception ex)
         {
-            return Result<List<StoreGroupedTransactions>>.Failure($"Error fetching grouped transactions: {ex.Message}");
+            return Result<Models.Responses.PagedResponse<StoreGroupedTransactions>>.Failure($"Error fetching grouped transactions: {ex.Message}");
         }
     }
 

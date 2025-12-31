@@ -12,16 +12,16 @@ namespace CnabApi.Services.Facades;
 /// 
 /// Integrates with object storage for persisting uploaded CNAB files.
 /// Uses Redis Streams for background processing of large files with retry logic.
-/// Uses Strategy pattern for status code determination (SOLID - Open/Closed Principle).
+/// Uses Strategy pattern for status code determination and upload processing (SOLID - Open/Closed Principle, Dependency Inversion).
 /// </summary>
 public class TransactionFacadeService(
     ITransactionService transactionService,
     IFileUploadService fileUploadService,
     IFileUploadTrackingService fileUploadTrackingService,
     IObjectStorageService objectStorageService,
-    IUploadQueueService uploadQueueService,
     IHashService hashService,
     UploadStatusCodeStrategyFactory statusCodeFactory,
+    IUploadProcessingStrategy uploadProcessingStrategy,
     ILogger<TransactionFacadeService> logger) : ITransactionFacadeService
 {
     private static string GetDefaultFileName() => DateTime.UtcNow.ToString("yyyyMMddHHmmss");
@@ -96,41 +96,13 @@ public class TransactionFacadeService(
                 "File upload recorded as pending. UploadId: {UploadId}, FileName: {FileName}, StoragePath: {StoragePath}",
                 fileUploadRecord.Id, fileName, storagePath);
 
-            // Phase 3: Enqueue for background processing
-            try
-            {
-                var messageId = await uploadQueueService.EnqueueUploadAsync(
-                    fileUploadRecord.Id,
-                    storagePath ?? string.Empty,
-                    cancellationToken);
-
-                logger.LogInformation(
-                    "File enqueued for background processing. UploadId: {UploadId}, MessageId: {MessageId}",
-                    fileUploadRecord.Id, messageId);
-
-                // Return 202 Accepted indicating the file has been queued for processing
-                return Result<UploadResult>.Success(new UploadResult
-                {
-                    TransactionCount = 0, // Processing not complete yet
-                    StatusCode = UploadStatusCode.Accepted, // 202 Accepted
-                    UploadId = fileUploadRecord.Id
-                });
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to enqueue file for background processing. UploadId: {UploadId}", fileUploadRecord.Id);
-                
-                // Update FileUpload record as failed
-                await fileUploadTrackingService.UpdateProcessingFailureAsync(
-                    fileUploadRecord.Id,
-                    $"Failed to enqueue for processing: {ex.Message}",
-                    0,
-                    cancellationToken);
-
-                return Result<UploadResult>.Failure(
-                    "Failed to queue file for processing",
-                    CreateFailureUploadResult(UploadStatusCode.InternalServerError));
-            }
+            // Phase 3: Process file using the injected strategy (synchronous for tests, asynchronous for production)
+            var fileContent = fileResult.Data!;
+            return await uploadProcessingStrategy.ProcessUploadAsync(
+                fileContent,
+                fileUploadRecord,
+                storagePath,
+                cancellationToken);
         }
         catch (Exception ex)
         {
@@ -165,19 +137,22 @@ public class TransactionFacadeService(
         }
     }
 
-    public async Task<Result<List<StoreGroupedTransactions>>> GetTransactionsGroupedByStoreAsync(
+    public async Task<Result<Models.Responses.PagedResponse<StoreGroupedTransactions>>> GetTransactionsGroupedByStoreAsync(
         Guid? uploadId = null,
+        int page = 1,
+        int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
         if (uploadId.HasValue)
         {
-            logger.LogInformation("Fetching transactions grouped by store for upload {UploadId}", uploadId.Value);
+            logger.LogInformation("Fetching transactions grouped by store for upload {UploadId}, page {Page}, pageSize {PageSize}", 
+                uploadId.Value, page, pageSize);
         }
         else
         {
-            logger.LogInformation("Fetching all transactions grouped by store");
+            logger.LogInformation("Fetching all transactions grouped by store, page {Page}, pageSize {PageSize}", page, pageSize);
         }
-        var result = await transactionService.GetTransactionsGroupedByStoreAsync(uploadId, cancellationToken);
+        var result = await transactionService.GetTransactionsGroupedByStoreAsync(uploadId, page, pageSize, cancellationToken);
         return result;
     }
 

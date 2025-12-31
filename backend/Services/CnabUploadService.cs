@@ -127,12 +127,17 @@ public class CnabUploadService(
                         {
                             case LineProcessingResult.Success:
                                 Interlocked.Increment(ref processedCount);
+                                // Record metrics
+                                CnabApi.Services.Metrics.CnabMetricsService.RecordTransactionProcessed("line", "success");
                                 break;
                             case LineProcessingResult.Skipped:
                                 Interlocked.Increment(ref skippedCount);
+                                CnabApi.Services.Metrics.CnabMetricsService.RecordTransactionProcessed("line", "skipped");
                                 break;
                             case LineProcessingResult.Failed:
                                 Interlocked.Increment(ref failedCount);
+                                CnabApi.Services.Metrics.CnabMetricsService.RecordTransactionProcessed("line", "failed");
+                                CnabApi.Services.Metrics.CnabMetricsService.RecordProcessingError("line_processing_failed", "CnabUploadService");
                                 break;
                         }
 
@@ -234,9 +239,10 @@ public class CnabUploadService(
                 // Get the last checkpoint line from database to determine if there are uncommitted increments
                 var dbLastCheckpointLine = uploadRecord.LastCheckpointLine;
                 
-                // If the final max line is greater than the last checkpoint, there are uncommitted increments
+                // If the final max line is greater than the last checkpoint, OR if there are local increments,
+                // there are uncommitted increments that need to be added
                 // Otherwise, all increments were already saved by checkpoints
-                var hasUncommittedIncrements = finalMaxLine > dbLastCheckpointLine;
+                var hasUncommittedIncrements = finalMaxLine > dbLastCheckpointLine || processedCount > 0 || failedCount > 0 || skippedCount > 0;
                 
                 int totalProcessed;
                 int totalFailed;
@@ -271,14 +277,17 @@ public class CnabUploadService(
                 
                 var totalProcessedLines = totalProcessed + totalFailed + totalSkipped;
                 
+                // Use TotalLineCount from database record (it should be set by SetTotalLineCountAsync)
+                var totalLineCount = uploadRecord.TotalLineCount;
+                
                 logger.LogInformation(
                     "Calculating final totals. UploadId: {UploadId}, Total: Processed={TotalProcessed}, Failed={TotalFailed}, Skipped={TotalSkipped}, TotalLines={TotalLines}, ExpectedTotal={ExpectedTotal}",
-                    fileUploadId, totalProcessed, totalFailed, totalSkipped, totalProcessedLines, totalLines);
+                    fileUploadId, totalProcessed, totalFailed, totalSkipped, totalProcessedLines, totalLineCount);
                 
                 // Determine checkpoint line: if all lines processed, use last line index; otherwise use max processed
-                var allLinesProcessed = totalLines > 0 && totalProcessedLines >= totalLines;
+                var allLinesProcessed = totalLineCount > 0 && totalProcessedLines >= totalLineCount;
                 var checkpointLine = allLinesProcessed 
-                    ? totalLines - 1  // All lines processed, checkpoint at last line (0-based index)
+                    ? totalLineCount - 1  // All lines processed, checkpoint at last line (0-based index)
                     : finalMaxLine;   // Not all processed yet, use max processed line
                 
                 // Save final checkpoint with totals
@@ -313,12 +322,24 @@ public class CnabUploadService(
                 "Processing completed. UploadId: {UploadId}, Processed: {Processed}, Failed: {Failed}, Skipped: {Skipped}",
                 fileUploadId, processedCount, failedCount, skippedCount);
 
-            // If no lines were processed successfully and there were failures, consider it a validation failure
+            // If no lines were processed successfully and there were failures, mark as failed and return error
+            // IMPORTANT: Update status to Failed BEFORE returning error to ensure status is updated
             if (processedCount == 0 && failedCount > 0)
             {
                 logger.LogWarning(
-                    "Upload validation failed. UploadId: {UploadId}, All {Failed} lines failed validation",
+                    "Upload validation failed. UploadId: {UploadId}, All {Failed} lines failed validation. Marking as Failed.",
                     fileUploadId, failedCount);
+                
+                // Ensure status is updated to Failed before returning error
+                using (var failureScope = serviceScopeFactory.CreateScope())
+                {
+                    var failureFileUploadTrackingService = failureScope.ServiceProvider.GetRequiredService<IFileUploadTrackingService>();
+                    await failureFileUploadTrackingService.UpdateProcessingFailureAsync(
+                        fileUploadId,
+                        $"Invalid CNAB file format - all {failedCount} lines failed validation (expected 80 characters per line)",
+                        0,
+                        cancellationToken);
+                }
                 
                 return Result<int>.Failure($"Invalid CNAB file format - all {failedCount} lines failed validation (expected 80 characters per line)");
             }

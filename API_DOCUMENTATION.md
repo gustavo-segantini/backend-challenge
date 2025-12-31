@@ -5,14 +5,14 @@
 **Version**: v1.0  
 **Last Updated**: December 2025
 
-## Índice
+## Table of Contents
 
 1. [MinIO Object Storage](#minio-object-storage)
-2. [Autenticação](#autenticação)
-3. [Transações](#transações)
-4. [Códigos de Status](#códigos-de-status)
-5. [Modelos de Dados](#modelos-de-dados)
-6. [Exemplos por Caso de Uso](#exemplos-por-caso-de-uso)
+2. [Authentication](#authentication)
+3. [Transactions](#transactions)
+4. [Status Codes](#status-codes)
+5. [Data Models](#data-models)
+6. [Use Case Examples](#use-case-examples)
 
 ---
 
@@ -228,7 +228,7 @@ This occurs when:
 
 ### POST /auth/register
 
-Registrar novo usuário na plataforma.
+Register a new user on the platform.
 
 **Endpoint**: `POST /api/v1/auth/register`
 
@@ -250,7 +250,7 @@ Registrar novo usuário na plataforma.
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
 curl -X POST http://localhost:5000/api/v1/auth/register \
   -H "Content-Type: application/json" \
@@ -264,7 +264,7 @@ curl -X POST http://localhost:5000/api/v1/auth/register \
 
 ### POST /auth/login
 
-Autenticar usuário com credenciais.
+Authenticate user with credentials.
 
 **Endpoint**: `POST /api/v1/auth/login`
 
@@ -290,11 +290,11 @@ Autenticar usuário com credenciais.
 
 ### GET /auth/github/login
 
-Iniciar fluxo de autenticação com GitHub.
+Initiate GitHub authentication flow.
 
 **Endpoint**: `GET /api/v1/auth/github/login?redirectUri=URL`
 
-**Exemplo**:
+**Example**:
 ```bash
 curl -X GET "http://localhost:5000/api/v1/auth/github/login?redirectUri=http://localhost:3000/auth"
 ```
@@ -303,7 +303,7 @@ curl -X GET "http://localhost:5000/api/v1/auth/github/login?redirectUri=http://l
 
 ### POST /auth/refresh
 
-Renovar access token usando refresh token.
+Renew access token using refresh token.
 
 **Endpoint**: `POST /api/v1/auth/refresh`
 
@@ -328,11 +328,11 @@ Renovar access token usando refresh token.
 
 ### GET /auth/me
 
-Obter perfil do usuário autenticado.
+Get authenticated user profile.
 
 **Endpoint**: `GET /api/v1/auth/me`
 
-**Headers** (OBRIGATÓRIO):
+**Headers** (REQUIRED):
 ```
 Authorization: Bearer {accessToken}
 ```
@@ -349,7 +349,7 @@ Authorization: Bearer {accessToken}
 
 ### POST /auth/logout
 
-Fazer logout (invalidar refresh token).
+Logout (invalidate refresh token).
 
 **Endpoint**: `POST /api/v1/auth/logout`
 
@@ -372,19 +372,19 @@ Authorization: Bearer {accessToken}
 
 ---
 
-## Transações
+## Transactions
 
-### Processamento Assíncrono e Filas
+### Asynchronous Processing and Queues
 
-O sistema utiliza **Redis Streams** para processamento assíncrono de arquivos CNAB grandes. Isso permite:
+The system uses **Redis Streams** for asynchronous processing of large CNAB files. This enables:
 
-- ✅ **Processamento não-bloqueante**: API retorna imediatamente (202 Accepted)
-- ✅ **Escalabilidade horizontal**: Múltiplas instâncias podem processar uploads em paralelo
-- ✅ **Resiliência**: Retry automático com exponential backoff
-- ✅ **Recuperação automática**: Uploads incompletos são detectados e re-enfileirados
-- ✅ **Checkpoints**: Suporte a retomada de processamento após falhas
+- ✅ **Non-blocking processing**: API returns immediately (202 Accepted)
+- ✅ **Horizontal scalability**: Multiple instances can process uploads in parallel
+- ✅ **Resilience**: Automatic retry with exponential backoff
+- ✅ **Automatic recovery**: Incomplete uploads are detected and re-enqueued
+- ✅ **Checkpoints**: Support for resuming processing after failures
 
-#### Arquitetura de Filas
+#### Queue Architecture
 
 ```
 ┌─────────────────┐
@@ -415,15 +415,15 @@ O sistema utiliza **Redis Streams** para processamento assíncrono de arquivos C
 
 #### Dead Letter Queue (DLQ)
 
-Mensagens que falham após todas as tentativas são movidas para a DLQ:
+Messages that fail after all attempts are moved to the DLQ:
 
 - **Stream**: `cnab:upload:dlq`
-- **Conteúdo**: UploadId, motivo da falha, número de tentativas
-- **Ação**: Requer intervenção manual ou processo de reprocessamento
+- **Content**: UploadId, failure reason, number of attempts
+- **Action**: Requires manual intervention or reprocessing process
 
-#### Configuração de Processamento
+#### Processing Configuration
 
-As opções de processamento podem ser configuradas via `appsettings.json`:
+Processing options can be configured via `appsettings.json`:
 
 ```json
 {
@@ -438,77 +438,77 @@ As opções de processamento podem ser configuradas via `appsettings.json`:
 }
 ```
 
-**Parâmetros**:
-- `ParallelWorkers`: Número de linhas processadas em paralelo
-- `CheckpointInterval`: Linhas processadas antes de salvar checkpoint
-- `MaxRetryPerLine`: Tentativas máximas por linha antes de falhar
-- `RetryDelayMs`: Delay entre tentativas (ms)
-- `RecoveryCheckIntervalMinutes`: Intervalo para verificar uploads incompletos
-- `StuckUploadTimeoutMinutes`: Tempo para considerar upload como travado
+**Parameters**:
+- `ParallelWorkers`: Number of lines processed in parallel
+- `CheckpointInterval`: Lines processed before saving checkpoint
+- `MaxRetryPerLine`: Maximum retry attempts per line before failing
+- `RetryDelayMs`: Delay between retries (ms)
+- `RecoveryCheckIntervalMinutes`: Interval to check for incomplete uploads
+- `StuckUploadTimeoutMinutes`: Time to consider upload as stuck
 
-## Transações
+## Transactions
 
 ### POST /transactions/upload
 
-Fazer upload e processar arquivo CNAB. O arquivo é processado de forma **assíncrona** em background usando Redis Streams.
+Upload and process CNAB file. The file is processed **asynchronously** in the background using Redis Streams.
 
 **Endpoint**: `POST /api/v1/transactions/upload`
 
-**Headers** (OBRIGATÓRIO):
+**Headers** (REQUIRED):
 ```
 Authorization: Bearer {accessToken}
 Content-Type: multipart/form-data
 ```
 
 **Body** (multipart/form-data):
-| Campo | Tipo | Obrigatório | Descrição |
-|-------|------|-----------|-----------|
-| file | file (.txt) | Sim | Arquivo CNAB formatado |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| file | file (.txt) | Yes | Formatted CNAB file |
 
-**Formato CNAB esperado** (80 caracteres por linha):
+**Expected CNAB Format** (80 characters per line):
 
-Cada linha contém uma transação com 80 caracteres em posições fixas:
-- Posição 0: Tipo de transação (1 char)
-- Posição 1-8: Data (YYYYMMDD)
-- Posição 9-18: Valor (10 dígitos, últimos 2 são decimais)
-- Posição 19-29: CPF (11 caracteres)
-- Posição 30-41: Número do cartão (12 caracteres)
-- Posição 42-47: Hora (HHMMSS)
-- Posição 48-61: Nome do proprietário (14 caracteres)
-- Posição 62-79: Nome da loja (18 caracteres)
+Each line contains a transaction with 80 characters in fixed positions:
+- Position 0: Transaction type (1 char)
+- Position 1-8: Date (YYYYMMDD)
+- Position 9-18: Amount (10 digits, last 2 are decimals)
+- Position 19-29: CPF (11 characters)
+- Position 30-41: Card number (12 characters)
+- Position 42-47: Time (HHMMSS)
+- Position 48-61: Owner name (14 characters)
+- Position 62-79: Store name (18 characters)
 
-**Tipos de transação**:
-- `1` - Débito (Entrada)
-- `2` - Boleto (Saída)
-- `3` - Financiamento (Saída)
-- `4` - Crédito (Entrada)
-- `5` - Recebimento de Empréstimo (Entrada)
-- `6` - Vendas (Entrada)
-- `7` - Recebimento TED (Entrada)
-- `8` - Recebimento DOC (Entrada)
-- `9` - Aluguel (Saída)
+**Transaction Types**:
+- `1` - Debit (Income)
+- `2` - Boleto (Expense)
+- `3` - Financing (Expense)
+- `4` - Credit (Income)
+- `5` - Loan Receipt (Income)
+- `6` - Sales (Income)
+- `7` - TED Receipt (Income)
+- `8` - DOC Receipt (Income)
+- `9` - Rent (Expense)
 
-#### Fluxo de Processamento Assíncrono
+#### Asynchronous Processing Flow
 
-1. **Upload Inicial** (Síncrono):
-   - Validação do arquivo (formato, tamanho, extensão)
-   - Cálculo de hash SHA256 para detecção de duplicatas
-   - Armazenamento do arquivo no MinIO (object storage)
-   - Criação do registro `FileUpload` com status `Pending`
-   - Enfileiramento na fila Redis Streams
+1. **Initial Upload** (Synchronous):
+   - File validation (format, size, extension)
+   - SHA256 hash calculation for duplicate detection
+   - File storage in MinIO (object storage)
+   - Creation of `FileUpload` record with `Pending` status
+   - Enqueueing to Redis Streams queue
 
-2. **Processamento em Background** (Assíncrono):
-   - Worker background (`UploadProcessingHostedService`) consome da fila
-   - Download do arquivo do MinIO
-   - Processamento linha por linha em paralelo
-   - Salvamento de checkpoints periódicos para recuperação
-   - Atualização do status: `Pending` → `Processing` → `Success`/`Failed`
+2. **Background Processing** (Asynchronous):
+   - Background worker (`UploadProcessingHostedService`) consumes from queue
+   - Download file from MinIO
+   - Line-by-line parallel processing
+   - Periodic checkpoint saving for recovery
+   - Status update: `Pending` → `Processing` → `Success`/`Failed`
 
-3. **Recuperação Automática**:
-   - Serviço `IncompleteUploadRecoveryService` verifica uploads incompletos a cada 5 minutos
-   - Uploads travados em `Processing` por mais de 30 minutos são re-enfileirados automaticamente
+3. **Automatic Recovery**:
+   - `IncompleteUploadRecoveryService` checks for incomplete uploads every 5 minutes
+   - Uploads stuck in `Processing` for more than 30 minutes are automatically re-enqueued
 
-**Response (202 Accepted)** - Arquivo aceito e enfileirado:
+**Response (202 Accepted)** - File accepted and enqueued:
 ```json
 {
   "message": "File accepted and queued for background processing",
@@ -516,7 +516,7 @@ Cada linha contém uma transação com 80 caracteres em posições fixas:
 }
 ```
 
-**Response (200 OK)** - Processamento síncrono (apenas em ambiente de teste):
+**Response (200 OK)** - Synchronous processing (test environment only):
 ```json
 {
   "message": "Successfully imported 100 transactions",
@@ -527,50 +527,50 @@ Cada linha contém uma transação com 80 caracteres em posições fixas:
 **Response (400 Bad Request)**:
 ```json
 {
-  "error": "Arquivo não foi fornecido ou está vazio."
+  "error": "File was not provided or is empty."
 }
 ```
 
-**Response (409 Conflict)** - Arquivo duplicado:
+**Response (409 Conflict)** - Duplicate file:
 ```json
 {
-  "error": "Este arquivo já foi processado anteriormente. Para evitar duplicatas, o upload foi rejeitado."
+  "error": "This file has already been processed previously. To avoid duplicates, the upload was rejected."
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
 curl -X POST http://localhost:5000/api/v1/transactions/upload \
   -H "Authorization: Bearer {accessToken}" \
   -F "file=@cnab.txt"
 ```
 
-#### Formato do Nome do Arquivo
+#### File Name Format
 
-O nome do arquivo (`fileName`) salvo no banco de dados segue o formato `yyyyMMddHHmmss` (data e hora UTC do upload).
+The file name (`fileName`) saved in the database follows the format `yyyyMMddHHmmss` (UTC date and time of upload).
 
-**Exemplo**: Um arquivo enviado em 29 de dezembro de 2025 às 14:30:25 UTC terá `fileName` = `"20251229143025"`.
+**Example**: A file uploaded on December 29, 2025 at 14:30:25 UTC will have `fileName` = `"20251229143025"`.
 
-#### Verificar Status do Upload
+#### Check Upload Status
 
-Após receber `202 Accepted`, você pode verificar o status do processamento usando os endpoints de gerenciamento de uploads.
+After receiving `202 Accepted`, you can check the processing status using the upload management endpoints.
 
 ---
 
 ### GET /transactions/uploads
 
-Lista todos os uploads com paginação e filtro opcional por status.
+List all uploads with pagination and optional status filter.
 
 **Endpoint**: `GET /api/v1/transactions/uploads`
 
 **Query Parameters**:
-| Parâmetro | Tipo | Padrão | Exemplo | Descrição |
-|-----------|------|-------|---------|-----------|
-| page | int | 1 | 2 | Número da página (1-based) |
-| pageSize | int | 50 | 20 | Itens por página (1-100) |
-| status | string | - | Processing | Filtro por status (Pending, Processing, Success, Failed, Duplicate, PartiallyCompleted) |
+| Parameter | Type | Default | Example | Description |
+|-----------|------|---------|---------|-------------|
+| page | int | 1 | 2 | Page number (1-based) |
+| pageSize | int | 50 | 20 | Items per page (1-100) |
+| status | string | - | Processing | Status filter (Pending, Processing, Success, Failed, Duplicate, PartiallyCompleted) |
 
-**Headers** (OBRIGATÓRIO):
+**Headers** (REQUIRED):
 ```
 Authorization: Bearer {accessToken}
 ```
@@ -606,39 +606,39 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
-# Listar todos os uploads
+# List all uploads
 curl -X GET "http://localhost:5000/api/v1/transactions/uploads?page=1&pageSize=20" \
   -H "Authorization: Bearer {accessToken}"
 
-# Filtrar por status
+# Filter by status
 curl -X GET "http://localhost:5000/api/v1/transactions/uploads?status=Processing" \
   -H "Authorization: Bearer {accessToken}"
 ```
 
-**Status possíveis**:
-- `Pending`: Arquivo enfileirado, aguardando processamento
-- `Processing`: Sendo processado por worker background
-- `Success`: Processamento concluído com sucesso
-- `Failed`: Processamento falhou após todas as tentativas
-- `Duplicate`: Arquivo duplicado (já foi processado anteriormente)
-- `PartiallyCompleted`: Processamento parcialmente concluído (algumas linhas falharam)
+**Possible Status Values**:
+- `Pending`: File enqueued, awaiting processing
+- `Processing`: Being processed by background worker
+- `Success`: Processing completed successfully
+- `Failed`: Processing failed after all attempts
+- `Duplicate`: Duplicate file (already processed previously)
+- `PartiallyCompleted`: Processing partially completed (some lines failed)
 
 ---
 
 ### GET /transactions/uploads/incomplete
 
-Lista uploads incompletos que estão travados em status `Processing`.
+List incomplete uploads that are stuck in `Processing` status.
 
 **Endpoint**: `GET /api/v1/transactions/uploads/incomplete`
 
 **Query Parameters**:
-| Parâmetro | Tipo | Padrão | Exemplo | Descrição |
-|-----------|------|-------|---------|-----------|
+| Parameter | Type | Default | Example | Description |
+|-----------|------|---------|---------|-------------|
 | timeoutMinutes | int | 30 | 60 | Minutos máximos que um upload pode estar em Processing antes de ser considerado travado |
 
-**Headers** (OBRIGATÓRIO):
+**Headers** (REQUIRED):
 ```
 Authorization: Bearer {accessToken}
 ```
@@ -671,7 +671,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
 curl -X GET "http://localhost:5000/api/v1/transactions/uploads/incomplete?timeoutMinutes=30" \
   -H "Authorization: Bearer {accessToken}"
@@ -681,16 +681,16 @@ curl -X GET "http://localhost:5000/api/v1/transactions/uploads/incomplete?timeou
 
 ### POST /transactions/uploads/{uploadId}/resume
 
-Retoma o processamento de um upload incompleto específico.
+Resume processing of a specific incomplete upload.
 
 **Endpoint**: `POST /api/v1/transactions/uploads/{uploadId}/resume`
 
 **Path Parameters**:
-| Parâmetro | Tipo | Obrigatório | Exemplo |
-|-----------|------|-----------|---------|
-| uploadId | Guid | Sim | 550e8400-e29b-41d4-a716-446655440000 |
+| Parameter | Type | Required | Example |
+|-----------|------|----------|---------|
+| uploadId | Guid | Yes | 550e8400-e29b-41d4-a716-446655440000 |
 
-**Headers** (OBRIGATÓRIO - Admin apenas):
+**Headers** (REQUIRED - Admin only):
 ```
 Authorization: Bearer {accessToken}
 ```
@@ -720,7 +720,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
 curl -X POST "http://localhost:5000/api/v1/transactions/uploads/550e8400-e29b-41d4-a716-446655440000/resume" \
   -H "Authorization: Bearer {accessToken}"
@@ -730,16 +730,16 @@ curl -X POST "http://localhost:5000/api/v1/transactions/uploads/550e8400-e29b-41
 
 ### POST /transactions/uploads/resume-all
 
-Retoma o processamento de todos os uploads incompletos.
+Resume processing of all incomplete uploads.
 
 **Endpoint**: `POST /api/v1/transactions/uploads/resume-all`
 
 **Query Parameters**:
-| Parâmetro | Tipo | Padrão | Exemplo | Descrição |
-|-----------|------|-------|---------|-----------|
+| Parameter | Type | Default | Example | Description |
+|-----------|------|---------|---------|-------------|
 | timeoutMinutes | int | 30 | 60 | Minutos máximos que um upload pode estar em Processing antes de ser considerado travado |
 
-**Headers** (OBRIGATÓRIO - Admin apenas):
+**Headers** (REQUIRED - Admin only):
 ```
 Authorization: Bearer {accessToken}
 ```
@@ -769,7 +769,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**Response com erros parciais** (200 OK):
+**Response with Partial Errors** (200 OK):
 ```json
 {
   "message": "Resumed 1 incomplete upload(s)",
@@ -789,7 +789,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
 curl -X POST "http://localhost:5000/api/v1/transactions/uploads/resume-all?timeoutMinutes=30" \
   -H "Authorization: Bearer {accessToken}"
@@ -799,26 +799,26 @@ curl -X POST "http://localhost:5000/api/v1/transactions/uploads/resume-all?timeo
 
 ### GET /transactions/{cpf}
 
-Listar transações por CPF com paginação, filtros e ordenação.
+List transactions by CPF with pagination, filters, and sorting.
 
 **Endpoint**: `GET /api/v1/transactions/{cpf}`
 
 **Path Parameters**:
-| Parâmetro | Tipo | Obrigatório | Exemplo |
-|-----------|------|-----------|---------|
-| cpf | string | Sim | 09620676017 |
+| Parameter | Type | Required | Example |
+|-----------|------|----------|---------|
+| cpf | string | Yes | 09620676017 |
 
 **Query Parameters**:
-| Parâmetro | Tipo | Padrão | Exemplo | Descrição |
-|-----------|------|-------|---------|-----------|
-| page | int | 1 | 2 | Número da página |
-| pageSize | int | 50 | 20 | Itens por página |
-| startDate | datetime | - | 2019-01-01 | Filtro data início (ISO 8601) |
-| endDate | datetime | - | 2019-12-31 | Filtro data fim (ISO 8601) |
-| types | string | - | 1,2,3 | Tipos separados por vírgula |
-| sort | string | desc | asc | Ordem: asc (crescente) ou desc (decrescente) |
+| Parameter | Type | Default | Example | Description |
+|-----------|------|---------|---------|-------------|
+| page | int | 1 | 2 | Page number |
+| pageSize | int | 50 | 20 | Items per page |
+| startDate | datetime | - | 2019-01-01 | Start date filter (ISO 8601) |
+| endDate | datetime | - | 2019-12-31 | End date filter (ISO 8601) |
+| types | string | - | 1,2,3 | Types separated by comma |
+| sort | string | desc | asc | Order: asc (ascending) or desc (descending) |
 
-**Headers** (OBRIGATÓRIO):
+**Headers** (REQUIRED):
 ```
 Authorization: Bearer {accessToken}
 ```
@@ -848,7 +848,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
 curl -X GET "http://localhost:5000/api/v1/transactions/09620676017?page=1&pageSize=50&sort=desc" \
   -H "Authorization: Bearer {accessToken}"
@@ -858,16 +858,16 @@ curl -X GET "http://localhost:5000/api/v1/transactions/09620676017?page=1&pageSi
 
 ### GET /transactions/{cpf}/balance
 
-Calcular saldo total para um CPF.
+Calculate total balance for a CPF.
 
 **Endpoint**: `GET /api/v1/transactions/{cpf}/balance`
 
 **Path Parameters**:
-| Parâmetro | Tipo | Obrigatório | Exemplo |
-|-----------|------|-----------|---------|
-| cpf | string | Sim | 09620676017 |
+| Parameter | Type | Required | Example |
+|-----------|------|----------|---------|
+| cpf | string | Yes | 09620676017 |
 
-**Headers** (OBRIGATÓRIO):
+**Headers** (REQUIRED):
 ```
 Authorization: Bearer {accessToken}
 ```
@@ -879,11 +879,11 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**Cálculo do saldo**:
-- Transações de entrada (tipos 1, 4, 5, 6, 7, 8): **+** valor
-- Transações de saída (tipos 2, 3, 9): **-** valor
+**Balance Calculation**:
+- Income transactions (types 1, 4, 5, 6, 7, 8): **+** amount
+- Expense transactions (types 2, 3, 9): **-** amount
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
 curl -X GET http://localhost:5000/api/v1/transactions/09620676017/balance \
   -H "Authorization: Bearer {accessToken}"
@@ -893,18 +893,18 @@ curl -X GET http://localhost:5000/api/v1/transactions/09620676017/balance \
 
 ### GET /transactions/{cpf}/search
 
-Buscar transações por descrição (full-text search).
+Search transactions by description (full-text search).
 
 **Endpoint**: `GET /api/v1/transactions/{cpf}/search`
 
 **Query Parameters**:
-| Parâmetro | Tipo | Obrigatório | Exemplo |
-|-----------|------|-----------|---------|
-| searchTerm | string | Sim | LOJA |
-| page | int | Não | 1 |
-| pageSize | int | Não | 20 |
+| Parameter | Type | Required | Example |
+|-----------|------|----------|---------|
+| searchTerm | string | Yes | LOJA |
+| page | int | No | 1 |
+| pageSize | int | No | 20 |
 
-**Headers** (OBRIGATÓRIO):
+**Headers** (REQUIRED):
 ```
 Authorization: Bearer {accessToken}
 ```
@@ -927,7 +927,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
 curl -X GET "http://localhost:5000/api/v1/transactions/09620676017/search?searchTerm=LOJA" \
   -H "Authorization: Bearer {accessToken}"
@@ -937,84 +937,113 @@ curl -X GET "http://localhost:5000/api/v1/transactions/09620676017/search?search
 
 ### GET /transactions/stores/{uploadId}
 
-Obter transações agrupadas por nome da loja para um upload específico, com saldo calculado para cada loja.
+Get transactions grouped by store name for a specific upload, with balance calculated for each store.
 
 **Endpoint**: `GET /api/v1/transactions/stores/{uploadId}`
 
 **Path Parameters**:
-| Parâmetro | Tipo | Obrigatório | Exemplo |
-|-----------|------|-----------|---------|
-| uploadId | Guid | Sim | 550e8400-e29b-41d4-a716-446655440000 |
+| Parameter | Type | Required | Example |
+|-----------|------|----------|---------|
+| uploadId | Guid | Yes | 550e8400-e29b-41d4-a716-446655440000 |
 
-**Headers** (OBRIGATÓRIO):
+**Query Parameters**:
+| Parameter | Type | Default | Example | Description |
+|-----------|------|---------|---------|-------------|
+| page | int | 1 | 2 | Page number (1-based) |
+| pageSize | int | 50 | 20 | Items per page (1-100) |
+
+**Headers** (REQUIRED):
 ```
 Authorization: Bearer {accessToken}
 ```
 
-**Nota importante sobre agrupamento**:
-- As transações são agrupadas **apenas por `StoreName`** (nome da loja)
-- Lojas com o mesmo nome são agrupadas juntas, mesmo que tenham `StoreOwner` diferentes
-- O campo `storeOwner` na resposta mostra o primeiro proprietário encontrado para aquela loja
-- O saldo (`balance`) é calculado somando todas as transações da loja, independente do proprietário
+**Important Note on Grouping**:
+- Transactions are grouped **only by `StoreName`** (store name)
+- Stores with the same name are grouped together, even if they have different `StoreOwner` values
+- The `storeOwner` field in the response shows the first owner found for that store
+- The balance (`balance`) is calculated by summing all transactions for the store, regardless of owner
 
 **Response** (200 OK):
 ```json
-[
-  {
-    "storeName": "BAR DO JOÃO",
-    "storeOwner": "096.206.760-17",
-    "transactions": [
-      {
-        "id": 1,
-        "storeName": "BAR DO JOÃO",
-        "storeOwner": "096.206.760-17",
-        "transactionDate": "2019-03-01T00:00:00Z",
-        "transactionTime": "15:34:53",
-        "amount": 142.00,
-        "natureCode": "3"
-      },
-      {
-        "id": 2,
-        "storeName": "BAR DO JOÃO",
-        "storeOwner": "123.456.789-00",
-        "transactionDate": "2019-03-02T10:20:00Z",
-        "transactionTime": "10:20:00",
-        "amount": 50.00,
-        "natureCode": "1"
-      }
-    ],
-    "balance": 92.00
-  }
-]
+{
+  "items": [
+    {
+      "storeName": "BAR DO JOÃO",
+      "storeOwner": "096.206.760-17",
+      "transactions": [
+        {
+          "id": 1,
+          "storeName": "BAR DO JOÃO",
+          "storeOwner": "096.206.760-17",
+          "transactionDate": "2019-03-01T00:00:00Z",
+          "transactionTime": "15:34:53",
+          "amount": 142.00,
+          "natureCode": "3"
+        },
+        {
+          "id": 2,
+          "storeName": "BAR DO JOÃO",
+          "storeOwner": "123.456.789-00",
+          "transactionDate": "2019-03-02T10:20:00Z",
+          "transactionTime": "10:20:00",
+          "amount": 50.00,
+          "natureCode": "1"
+        }
+      ],
+      "balance": 92.00
+    }
+  ],
+  "totalCount": 10,
+  "page": 1,
+  "pageSize": 50,
+  "totalPages": 1
+}
 ```
 
-**Response** (404 Not Found) - Nenhuma transação encontrada:
+**Response** (404 Not Found) - No transactions found:
 ```json
 {
   "error": "No transactions found for this upload"
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
-curl -X GET "http://localhost:5000/api/v1/transactions/stores/550e8400-e29b-41d4-a716-446655440000" \
+# List first page with 20 items per page
+curl -X GET "http://localhost:5000/api/v1/transactions/stores/550e8400-e29b-41d4-a716-446655440000?page=1&pageSize=20" \
   -H "Authorization: Bearer {accessToken}"
 ```
+
+**Note on Pagination**:
+
+This endpoint uses **offset-based pagination** (page-based) instead of cursor-based pagination for the following technical reasons:
+
+1. **Bidirectional Navigation**: Enables direct navigation both forward (Next) and backward (Previous) without requiring client-side state management. The frontend can easily calculate previous pages using `page - 1`.
+
+2. **Total Count Availability**: Provides `totalCount` and `totalPages`, enabling the frontend to display information like "Page 2 of 5" and implement direct navigation to specific pages (e.g., go to page 3).
+
+3. **Data Consistency**: For the store-grouped transaction use case, where data is relatively stable after CNAB file processing, offset-based pagination provides a consistent snapshot of data at query time, with minimal risk of duplicate or missing items during navigation.
+
+4. **Use Case Alignment**: Since transactions are grouped by store and data doesn't change frequently during viewing (file already processed), there's no need for cursor-based pagination, which is more suitable for constantly changing data or extremely large volumes (millions of records).
+
+5. **Frontend Implementation Simplicity**: The interface can implement traditional pagination controls (Previous/Next buttons, page selector) without needing to manage cursor tokens or additional state.
+
+6. **Stable Ordering**: Ordering by `StoreName` is stable and predictable, ensuring that the same page always returns the same results when queried, as long as data hasn't been modified.
 
 ---
 
 ### DELETE /transactions
 
-Limpar todas as transações (apenas Admin).
+Clear all transactions (Admin only).
 
 **Endpoint**: `DELETE /api/v1/transactions`
 
-**Headers** (OBRIGATÓRIO):
+**Headers** (REQUIRED):
 ```
 Authorization: Bearer {accessToken}
 ```
 
-**Autorização**: Requer role `Admin`
+**Authorization**: Requires `Admin` role
 
 **Response** (200 OK):
 ```json
@@ -1023,7 +1052,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**Exemplo cURL**:
+**Example cURL**:
 ```bash
 curl -X DELETE http://localhost:5000/api/v1/transactions \
   -H "Authorization: Bearer {accessToken}"
@@ -1031,20 +1060,20 @@ curl -X DELETE http://localhost:5000/api/v1/transactions \
 
 ---
 
-## Códigos de Status
+## Status Codes
 
-| Status | Descrição | Exemplo |
-|--------|-----------|---------|
-| 200 | OK - Sucesso | Transações retornadas |
-| 302 | Found - Redirecionamento | OAuth GitHub |
-| 400 | Bad Request - Erro de validação | CPF inválido |
-| 401 | Unauthorized - Sem autenticação | Token ausente |
-| 403 | Forbidden - Sem autorização | Não é Admin |
-| 500 | Internal Server Error | Erro no servidor |
+| Status | Description | Example |
+|--------|-------------|---------|
+| 200 | OK - Success | Transactions returned |
+| 302 | Found - Redirect | OAuth GitHub |
+| 400 | Bad Request - Validation error | Invalid CPF |
+| 401 | Unauthorized - No authentication | Missing token |
+| 403 | Forbidden - No authorization | Not Admin |
+| 500 | Internal Server Error | Server error |
 
 ---
 
-## Modelos de Dados
+## Data Models
 
 ### AuthResponse
 ```json
@@ -1086,9 +1115,9 @@ curl -X DELETE http://localhost:5000/api/v1/transactions \
 
 ---
 
-## Exemplos por Caso de Uso
+## Use Case Examples
 
-### 1️⃣ Fluxo Completo: Login → Upload → Consultar
+### 1️⃣ Complete Flow: Login → Upload → Query
 
 ```bash
 # 1. Login
@@ -1104,16 +1133,16 @@ curl -X POST http://localhost:5000/api/v1/transactions/upload \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@cnab.txt"
 
-# 3. Consultar transações
+# 3. Query transactions
 curl -X GET "http://localhost:5000/api/v1/transactions/09620676017?page=1&pageSize=10" \
   -H "Authorization: Bearer $TOKEN"
 
-# 4. Obter saldo
+# 4. Get balance
 curl -X GET http://localhost:5000/api/v1/transactions/09620676017/balance \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### 2️⃣ Renovar Token Expirado
+### 2️⃣ Renew Expired Token
 
 ```javascript
 async function refreshToken() {
@@ -1134,19 +1163,19 @@ async function refreshToken() {
 }
 ```
 
-### 3️⃣ Filtrar Transações por Data
+### 3️⃣ Filter Transactions by Date
 
 ```bash
-# Transações de crédito (tipo 1) em 2019
+# Credit transactions (type 1) in 2019
 curl -X GET "http://localhost:5000/api/v1/transactions/09620676017?startDate=2019-01-01&endDate=2019-12-31&types=1&sort=desc" \
   -H "Authorization: Bearer $TOKEN"
 
-# Últimas 5 transações
+# Last 5 transactions
 curl -X GET "http://localhost:5000/api/v1/transactions/09620676017?page=1&pageSize=5&sort=desc" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### 4️⃣ Buscar por Loja
+### 4️⃣ Search by Store
 
 ```bash
 curl -X GET "http://localhost:5000/api/v1/transactions/09620676017/search?searchTerm=LOJA" \
@@ -1155,8 +1184,8 @@ curl -X GET "http://localhost:5000/api/v1/transactions/09620676017/search?search
 
 ---
 
-**Última atualização**: Dezembro 29, 2025  
-**Versão**: v1.1.0
+**Last Updated**: December 29, 2025  
+**Version**: v1.1.0
 
 // Upload CNAB file
 export const uploadCnabFile = async (file) => {
@@ -1242,10 +1271,54 @@ The Swagger UI provides:
 
 ## Rate Limiting & Performance
 
-Current implementation has no rate limiting. Recommended practices:
-- Upload files with reasonable size (< 10MB)
-- Batch operations for large datasets
-- Use pagination for large result sets (future enhancement)
+The API implements **IP-based rate limiting** to protect against abuse and ensure fair usage.
+
+### Rate Limit Rules
+
+| Endpoint | Limit | Period | Description |
+|----------|-------|--------|-------------|
+| All endpoints | 100 requests | 1 minute | General API limit |
+| All endpoints | 1000 requests | 1 hour | Hourly API limit |
+| `POST /transactions/upload` | 10 requests | 1 minute | File upload limit |
+| `POST /auth/login` | 5 requests | 1 minute | Login attempt limit |
+| `POST /auth/register` | 3 requests | 1 hour | Registration limit |
+
+### Rate Limit Headers
+
+When rate limiting is active, the API returns the following headers:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1640995200
+```
+
+### Rate Limit Exceeded Response
+
+When the rate limit is exceeded, the API returns:
+
+**Status Code**: `429 Too Many Requests`
+
+**Response Body**:
+```json
+{
+  "error": "API rate limit exceeded. Maximum 100 requests per 1m."
+}
+```
+
+### Whitelisted Endpoints
+
+The following endpoints are **excluded** from rate limiting:
+- `GET /api/v1/health`
+- `GET /api/v1/health/ready`
+- `GET /api/v1/health/live`
+
+### Best Practices
+
+- **Upload files**: Keep file size reasonable (< 10MB recommended)
+- **Batch operations**: Use pagination for large result sets
+- **Respect rate limits**: Implement exponential backoff when receiving 429 responses
+- **Monitor usage**: Check `X-RateLimit-Remaining` header to track remaining requests
 
 ---
 
@@ -1268,12 +1341,12 @@ Current implementation has no rate limiting. Recommended practices:
 
 ### Common Issues
 
-**1. File upload fails with "Conteúdo do arquivo está vazio"**
+**1. File upload fails with "File content is empty"**
 - Ensure the file is not empty
 - Check file encoding (UTF-8 recommended)
 - Verify file format matches CNAB specification
 
-**2. "Linha inválida: esperado mínimo 80 caracteres"**
+**2. "Invalid line: expected minimum 80 characters"**
 - Check that each line has exactly 80 characters
 - Remove trailing newlines or spaces
 - Verify line endings (LF or CRLF)
@@ -1290,102 +1363,108 @@ Current implementation has no rate limiting. Recommended practices:
 
 ---
 
-## Testes e Qualidade
+## Testing & Quality
 
 ### Code Coverage
 
-O projeto mantém alta cobertura de testes para garantir qualidade e confiabilidade:
+The project maintains high test coverage to ensure quality and reliability:
 
-| Métrica | Valor | Status |
-|---------|-------|--------|
-| **Line Coverage** | 80.15% | ✅ Excelente |
-| **Branch Coverage** | 70.13% | ✅ Muito Bom |
-| **Method Coverage** | 88.53% | ✅ Excelente |
-| **Total de Testes** | 546 | - |
-| **Testes Aprovados** | 546 | ✅ |
-| **Testes Falhando** | 0 | ✅ |
-| **Testes Ignorados** | 0 | ✅ |
+| Metric | Value | Status |
+|--------|-------|--------|
+| **Line Coverage** | 90.19% | ✅ Excellent |
+| **Branch Coverage** | 78.04% | ✅ Very Good |
+| **Method Coverage** | 93.67% | ✅ Excellent |
+| **Total Tests** | 603 | - |
+| **Tests Passed** | 603 | ✅ |
+| **Tests Failed** | 0 | ✅ |
+| **Tests Ignored** | 0 | ✅ |
 
-### Executar Testes
+### Running Tests
 
 ```bash
-# Todos os testes
+# All tests
 dotnet test
 
-# Apenas unitários
+# Unit tests only
 dotnet test backend.Tests/CnabApi.Tests.csproj
 
-# Apenas integração
+# Integration tests only
 dotnet test backend.IntegrationTests/CnabApi.IntegrationTests.csproj
 
-# Com relatório de cobertura
+# With coverage report
 dotnet test backend.Tests/CnabApi.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
 ```
 
-### Melhorias na Qualidade dos Testes
+### Test Quality Improvements
 
-**Estrutura Otimizada:**
-- ✅ **Testes consolidados**: Testes duplicados foram mesclados em `[Theory]` com `[InlineData]` para reduzir duplicação
-- ✅ **Testes removidos**: Testes marcados como `Skip` que não podem ser executados foram removidos
-- ✅ **Cobertura expandida**: Adicionados testes para métodos anteriormente não cobertos
+**Optimized Structure:**
+- ✅ **Consolidated tests**: Duplicate tests were merged into `[Theory]` with `[InlineData]` to reduce duplication
+- ✅ **Removed tests**: Tests marked as `Skip` that cannot be executed were removed
+- ✅ **Expanded coverage**: Added tests for previously uncovered methods
 
-**Novos Testes Criados:**
-- `HashServiceTests`: Testes completos para ComputeFileHash, ComputeLineHash, ComputeStreamHashAsync
-- `FileUploadTrackingServiceTests`: Testes para CommitLineHashesAsync, FindIncompleteUploadsAsync, UpdateProcessingResultAsync
-- `TransactionServiceTests`: Testes para AddSingleTransactionAsync, AddTransactionToContextAsync
-- `CnabParserServiceTests`: Testes consolidados para parsing de diferentes campos
-- `EfCoreUnitOfWorkTests`: Testes completos para gerenciamento de transações
-- `LineProcessorTests`: Testes para processamento de linhas com vários cenários
-- `CheckpointManagerTests`: Testes para lógica de checkpoint
-- `UploadStatusCodeStrategyFactoryTests`: Testes para determinação de códigos de status
+**New Tests Created:**
+- `HashServiceTests`: Complete tests for ComputeFileHash, ComputeLineHash, ComputeStreamHashAsync
+- `FileUploadTrackingServiceTests`: Tests for CommitLineHashesAsync, FindIncompleteUploadsAsync, UpdateProcessingResultAsync
+- `TransactionServiceTests`: Tests for AddSingleTransactionAsync, AddTransactionToContextAsync
+- `CnabParserServiceTests`: Consolidated tests for parsing different fields
+- `EfCoreUnitOfWorkTests`: Complete tests for transaction management
+- `LineProcessorTests`: Tests for line processing with various scenarios
+- `CheckpointManagerTests`: Tests for checkpoint logic
+- `UploadStatusCodeStrategyFactoryTests`: Tests for status code determination
+- `AsynchronousUploadProcessingStrategyTests`: Complete tests for asynchronous upload processing strategy (enqueueing, error handling, cancellation)
+- `SynchronousUploadProcessingStrategyTests`: Complete tests for synchronous upload processing strategy (immediate processing, success/failure scenarios, exception handling)
+- `UploadManagementServiceTests`: Complete tests for upload management operations (queries with pagination and filters, incomplete uploads detection, resume operations with validation and error handling)
 
-### Gerar Relatório de Cobertura
+### Generate Coverage Report
 
 ```bash
-# 1. Executar testes com cobertura
+# 1. Run tests with coverage
 dotnet test backend.Tests/CnabApi.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
 
-# 2. Gerar relatório HTML (requer reportgenerator)
+# 2. Generate HTML report (requires reportgenerator)
 reportgenerator -reports:backend.Tests/coverage.cobertura.xml -targetdir:backend.Tests/TestResults/CoverageReport -reporttypes:Html
 
-# 3. Visualizar relatório
+# 3. View report
 start backend.Tests/TestResults/CoverageReport/index.html  # Windows
 ```
 
-### Instalar ReportGenerator
+### Install ReportGenerator
 
 ```bash
 dotnet tool install -g dotnet-reportgenerator-globaltool
 ```
 
-### Exclusões de Coverage
+### Coverage Exclusions
 
-Código de infraestrutura excluído da cobertura (marcado com `[ExcludeFromCodeCoverage]`):
-- ✅ Migrations do Entity Framework Core
-- ✅ Program.cs (configuração de startup)
-- ✅ Extensions de configuração (DI, Middleware, HealthChecks)
-- ✅ DataSeeder (dados iniciais)
-- ✅ Middleware global de exceções
-- ✅ Serviços Redis (RedisDistributedLockService, RedisUploadQueueService) - requerem testes de integração com Redis
-- ✅ Serviços MinIO (MinioInitializationService, MinioStorageService, MinioStorageConfiguration) - requerem testes de integração com MinIO
-- ✅ Infraestrutura de testes (MockDistributedLockService, MockUploadQueueService) - não fazem parte da lógica de negócio
+Infrastructure code excluded from coverage (marked with `[ExcludeFromCodeCoverage]`):
+- ✅ Entity Framework Core Migrations
+- ✅ Program.cs (startup configuration)
+- ✅ Configuration extensions (DI, Middleware, HealthChecks)
+- ✅ DataSeeder (initial data)
+- ✅ Global exception middleware
+- ✅ Redis services (RedisDistributedLockService, RedisUploadQueueService) - require integration tests with Redis
+- ✅ MinIO services (MinioInitializationService, MinioStorageService, MinioStorageConfiguration) - require integration tests with MinIO
+- ✅ Test infrastructure (MockDistributedLockService, MockUploadQueueService) - not part of business logic
 
-Isso garante que as métricas refletem apenas **código de negócio testável**. Componentes de infraestrutura que requerem serviços externos (Redis, MinIO) são excluídos e devem ser testados com testes de integração.
+This ensures that metrics reflect only **testable business code**. Infrastructure components that require external services (Redis, MinIO) are excluded and should be tested with integration tests.
 
-### Melhorias na Qualidade dos Testes
+### Test Quality Improvements
 
-**Consolidação de Testes:**
-- ✅ Testes duplicados foram consolidados em `[Theory]` com `[InlineData]` para melhor manutenibilidade
-- ✅ Removidos testes que não podem ser executados (marcados como Skip)
-- ✅ Adicionados testes abrangentes para métodos anteriormente não cobertos
+**Test Consolidation:**
+- ✅ Duplicate tests were consolidated into `[Theory]` with `[InlineData]` for better maintainability
+- ✅ Removed tests that cannot be executed (marked as Skip)
+- ✅ Added comprehensive tests for previously uncovered methods
 
-**Cobertura por Módulo:**
-- ✅ **HashService**: 100% cobertura (ComputeFileHash, ComputeLineHash, ComputeStreamHashAsync)
-- ✅ **FileUploadTrackingService**: Cobertura completa incluindo CommitLineHashesAsync, FindIncompleteUploadsAsync, UpdateProcessingResultAsync
-- ✅ **CnabParserService**: Testes consolidados para parsing de diferentes campos
-- ✅ **TransactionService**: Testes para AddSingleTransactionAsync e AddTransactionToContextAsync
-- ✅ **FileService**: Testes consolidados para validação de extensões e conteúdo
-- ✅ **UnitOfWork**: Testes completos para gerenciamento de transações (com supressão de warnings do InMemory)
+**Coverage by Module:**
+- ✅ **HashService**: 100% coverage (ComputeFileHash, ComputeLineHash, ComputeStreamHashAsync)
+- ✅ **FileUploadTrackingService**: Complete coverage including CommitLineHashesAsync, FindIncompleteUploadsAsync, UpdateProcessingResultAsync
+- ✅ **CnabParserService**: Consolidated tests for parsing different fields
+- ✅ **TransactionService**: Tests for AddSingleTransactionAsync and AddTransactionToContextAsync
+- ✅ **FileService**: Consolidated tests for extension and content validation
+- ✅ **UnitOfWork**: Complete tests for transaction management (with InMemory warnings suppression)
+- ✅ **AsynchronousUploadProcessingStrategy**: Complete coverage for enqueueing, error handling, and cancellation scenarios
+- ✅ **SynchronousUploadProcessingStrategy**: Complete coverage for immediate processing, success/failure scenarios, and exception handling
+- ✅ **UploadManagementService**: Complete coverage for upload queries, incomplete uploads detection, and resume operations with validation
 
 ---
 
@@ -1408,6 +1487,15 @@ Isso garante que as métricas refletem apenas **código de negócio testável**.
   - Removed tests that cannot be executed (Skip tests)
   - Marked infrastructure services as `[ExcludeFromCodeCoverage]` (Redis, MinIO, Mock services)
   - Current coverage: 80.15% line, 70.13% branch, 88.53% method (546 tests)
+- v1.2.0 (2025-12-29): Upload Processing Strategy Tests
+  - Added comprehensive tests for `AsynchronousUploadProcessingStrategy` (enqueueing, error handling, cancellation)
+  - Added comprehensive tests for `SynchronousUploadProcessingStrategy` (immediate processing, success/failure scenarios, exception handling)
+  - Increased test count from 546 to 585 tests
+  - Current coverage: 85.98% line, 76.35% branch, 90.06% method (585 tests)
+- v1.3.0 (2025-12-29): Upload Management Service Tests
+  - Added comprehensive tests for `UploadManagementService` (queries with pagination and filters, incomplete uploads detection, resume operations)
+  - Increased test count from 585 to 603 tests
+  - Current coverage: 90.19% line, 78.04% branch, 93.67% method (603 tests)
 
 ---
 

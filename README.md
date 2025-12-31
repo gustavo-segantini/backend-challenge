@@ -1,8 +1,8 @@
 # 🏦 CNAB Parser API - Backend Challenge
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
-[![Tests](https://img.shields.io/badge/tests-546%20passing-brightgreen)](https://github.com)
-[![Coverage](https://img.shields.io/badge/coverage-80.15%25-brightgreen)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-603%20passing-brightgreen)](https://github.com)
+[![Coverage](https://img.shields.io/badge/coverage-90.19%25-brightgreen)](https://github.com)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 A robust, production-ready API for processing and analyzing CNAB files with JWT authentication, GitHub OAuth, and enterprise-grade features like structured logging, robust validation, and comprehensive tests.
@@ -29,7 +29,7 @@ A robust, production-ready API for processing and analyzing CNAB files with JWT 
 ✅ **Pagination, filtering, and sorting** on transaction queries  
 ✅ **Structured logging** with end-to-end correlation ID (Serilog)  
 ✅ **Robust validation** with FluentValidation (real CPF, credentials)  
-✅ **Comprehensive tests** (546 tests with 80.15% line coverage, 70.13% branch coverage, 88.53% method coverage)  
+✅ **Comprehensive tests** (603 tests with 90.19% line coverage, 78.04% branch coverage, 93.67% method coverage)  
 ✅ **Docker Compose** for development and production  
 ✅ **Application Insights** ready for production telemetry  
 ✅ **ProblemDetails RFC 7807** for standardized HTTP responses  
@@ -318,7 +318,10 @@ Redis Queue (Streams)
 **Optional (local development):**
 - .NET 9 SDK
 - Node 20+
-- PostgreSQL 16
+- PostgreSQL 16 (required for local development without Docker)
+
+**Note on Database Selection:**
+The challenge requires using PostgreSQL, MySQL, or SQL Server. This project uses **PostgreSQL 15/16** as the database solution, which fully satisfies the requirement. The application is designed to work with PostgreSQL and uses EF Core with Npgsql provider for optimal performance and PostgreSQL-specific features.
 
 ## Running with Docker (recommended)
 
@@ -476,7 +479,7 @@ The test suite has been optimized for maintainability and coverage:
 The project has **80.15% line coverage**, **70.13% branch coverage**, and **88.53% method coverage** (546 tests).
 
 **Current Test Status:**
-- ✅ **546 tests passing**
+- ✅ **603 tests passing**
 - ✅ **0 tests failing**
 - ✅ **0 tests skipped**
 - ✅ **All tests consolidated** - Duplicate tests merged into `[Theory]` tests with `[InlineData]`
@@ -522,9 +525,10 @@ This ensures coverage reflects only **testable business code**. Infrastructure c
 ## Main Endpoints
 
 - `POST /api/v1/transactions/upload` — upload CNAB file (returns 202 Accepted for async processing)
-- `GET /api/v1/transactions/{cpf}` — list transactions by CPF with pagination and filters
-- `GET /api/v1/transactions/{cpf}/balance` — calculate CPF balance
+- `GET /api/v1/transactions/stores/{uploadId}` — get transactions grouped by store with pagination
 - `GET /api/v1/transactions/uploads` — list all file uploads with status
+- `POST /api/v1/transactions/uploads/{uploadId}/resume` — resume incomplete upload processing
+- `POST /api/v1/transactions/uploads/resume-all` — resume all incomplete uploads
 - `DELETE /api/v1/transactions` — clear all data (Admin only)
 
 ### Upload Processing Modes
@@ -673,8 +677,8 @@ backend-challenge/
 └── ROADMAP.md                  # Development plan
 ```
 
-**Total tests**: 546 (xUnit + Moq)  
-**Coverage**: 80.15% line, 70.13% branch, 88.53% method
+**Total tests**: 603 (xUnit + Moq)  
+**Coverage**: 90.19% line, 78.04% branch, 93.67% method
 
 **Test Quality Improvements:**
 - ✅ Consolidated duplicate tests into `[Theory]` tests with `[InlineData]` for better maintainability
@@ -702,7 +706,7 @@ The following indexes are automatically created via EF Core migrations to optimi
 
 | Index | Table | Columns | Purpose |
 |-------|-------|---------|---------|
-| `IX_Transactions_Cpf` | Transactions | Cpf | Fast lookups by CPF (most common query) |
+| `IX_Transactions_Cpf` | Transactions | Cpf | Index for CPF field (part of transaction data) |
 | `IX_Transactions_NatureCode` | Transactions | NatureCode | Filter by transaction type |
 | `IX_RefreshTokens_UserId` | RefreshTokens | UserId | JWT refresh token lookups |
 | `IX_RefreshTokens_Token` | RefreshTokens | Token | Token validation |
@@ -730,7 +734,50 @@ Polly-based retry policies with exponential backoff for transient failures:
 - ✅ **Batch processing**: EF Core `AddRange()` + single `SaveChanges()`
 - ✅ **Connection pooling**: Default ADO.NET pool (min=0, max=100)
 - ✅ **Query optimization**: Includes/projections to avoid N+1
-- ✅ **Pagination**: Cursor-based for large result sets
+- ✅ **Pagination**: Offset-based (page-based) pagination for transaction queries
+
+### Pagination Strategy
+
+The API uses **offset-based pagination** (page-based) instead of cursor-based pagination for transaction queries. This choice is based on the following technical considerations:
+
+**1. Bidirectional Navigation**
+- Enables direct navigation both forward (Next) and backward (Previous) without requiring client-side state management
+- Frontend can easily calculate previous pages using `page - 1`
+- Supports direct page jumps (e.g., "go to page 3")
+
+**2. Total Count Availability**
+- Provides `totalCount` and `totalPages` metadata, enabling UI features like:
+  - "Page 2 of 5" indicators
+  - Progress bars showing pagination status
+  - Direct page number selection
+
+**3. Data Consistency**
+- For the store-grouped transaction use case, data is relatively stable after CNAB file processing
+- Offset-based pagination provides a consistent snapshot of data at query time
+- Minimal risk of duplicate or missing items during navigation for this use case
+
+**4. Use Case Alignment**
+- Transactions are grouped by store name from already-processed files
+- Data doesn't change frequently during viewing sessions
+- Cursor-based pagination is more suitable for:
+  - Extremely large datasets (millions+ records)
+  - Frequently changing data (real-time feeds)
+  - Scenarios where data consistency during pagination is critical
+
+**5. Frontend Simplicity**
+- Traditional pagination controls (Previous/Next buttons, page selectors) can be implemented without cursor token management
+- No need for additional client-side state to track cursors
+- Easier to implement and maintain
+
+**6. Stable Ordering**
+- Results are ordered by `StoreName`, which provides stable and predictable ordering
+- The same page number always returns the same results (assuming data hasn't changed)
+- Ensures consistent user experience across page navigation
+
+**When Cursor-Based Would Be Preferred:**
+- Real-time data feeds with high mutation rates
+- Datasets with millions of records where offset becomes inefficient
+- Scenarios requiring guaranteed consistency during pagination (no duplicates/skips)
 
 ## License
 

@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Serilog;
 using CnabApi.Extensions;
 using CnabApi.Middleware;
+using AspNetCoreRateLimit;
 
 // Initial bootstrap logger (before configuration is loaded)
 Log.Logger = new LoggerConfiguration()
@@ -25,6 +26,7 @@ try
         .AddApiVersioningConfiguration()
         .AddFluentValidationConfiguration()
         .AddSwaggerConfiguration()
+        .AddRateLimitingConfiguration(builder.Configuration)
         .AddCorsConfiguration()
         .AddProblemDetailsConfiguration()
         .AddOptionsConfiguration(builder.Configuration)
@@ -33,7 +35,7 @@ try
         .AddApplicationInsightsConfiguration(builder.Configuration)
         .AddCachingConfiguration(builder)
         .AddCompressionConfiguration()
-        .AddApplicationServices()
+        .AddApplicationServices(builder)
         .AddMinioConfiguration(builder.Configuration)
         .AddHealthChecksConfiguration(builder);
 
@@ -65,6 +67,7 @@ try
     app.UseEnableRequestBodyBuffering();
     app.UseCorrelationIdMiddleware();
     app.UseExceptionHandlingMiddleware();
+    app.UseIpRateLimiting(); // Rate limiting middleware (must be early in pipeline)
     app.UseResponseCompression();
     app.UseSwaggerConfiguration();
     app.UseStaticFiles();

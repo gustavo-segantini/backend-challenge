@@ -16,6 +16,7 @@ using CnabApi.Models;
 using CnabApi.Validators;
 using CnabApi.Services;
 using Minio;
+using AspNetCoreRateLimit;
 
 namespace CnabApi.Extensions;
 
@@ -75,10 +76,11 @@ public static class ServiceCollectionExtensions
                     
                     **Features:**
                     - CNAB file upload and parsing with real-time validation
-                    - Transaction queries with CPF-based filtering and pagination
+                    - Transaction queries grouped by store with pagination
                     - JWT-based authentication with GitHub OAuth integration
                     - Balance calculation and transaction categorization
                     - Health checks and Prometheus metrics
+                    - Rate limiting for API protection
                     
                     **Authentication:**
                     All transaction endpoints require Bearer token authentication via JWT.
@@ -147,6 +149,27 @@ public static class ServiceCollectionExtensions
                 }
             });
         });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds rate limiting configuration to protect API from abuse.
+    /// </summary>
+    public static IServiceCollection AddRateLimitingConfiguration(this IServiceCollection services, IConfiguration configuration)
+    {
+        // Load rate limit configuration from appsettings
+        services.Configure<IpRateLimitOptions>(configuration.GetSection("IpRateLimiting"));
+        services.Configure<IpRateLimitPolicies>(configuration.GetSection("IpRateLimitPolicies"));
+
+        // Add in-memory cache for rate limit counters
+        services.AddMemoryCache();
+        
+        // Add rate limit services
+        services.AddInMemoryRateLimiting();
+        
+        // Add rate limit configuration store
+        services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
         return services;
     }
@@ -338,7 +361,7 @@ public static class ServiceCollectionExtensions
     /// Registers all application services using Scrutor for automatic registration.
     /// Automatically discovers and registers implementations by their interfaces.
     /// </summary>
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services, WebApplicationBuilder builder)
     {
         // Use Scrutor to automatically register all services
         services.Scan(scan => scan
@@ -348,7 +371,8 @@ public static class ServiceCollectionExtensions
                        && !t.IsAbstract 
                        && !t.IsInterface
                        && t.Name != "UploadProcessingHostedService" // Exclude HostedService as it's registered manually
-                       && t.Namespace != "CnabApi.Services.Testing")) // Exclude test mocks
+                       && t.Namespace != "CnabApi.Services.Testing" // Exclude test mocks
+                       && t.Namespace != "CnabApi.Services.UploadProcessing")) // Exclude upload processing strategies (registered explicitly)
             .AsMatchingInterface()
             .WithScopedLifetime());
 
@@ -367,6 +391,17 @@ public static class ServiceCollectionExtensions
 
         // Register password hasher as singleton
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+
+        // Register upload processing strategy based on environment
+        // This follows the Strategy pattern and Dependency Inversion Principle
+        if (builder.Environment.EnvironmentName == "Test")
+        {
+            services.AddScoped<Services.Interfaces.IUploadProcessingStrategy, Services.UploadProcessing.SynchronousUploadProcessingStrategy>();
+        }
+        else
+        {
+            services.AddScoped<Services.Interfaces.IUploadProcessingStrategy, Services.UploadProcessing.AsynchronousUploadProcessingStrategy>();
+        }
 
         return services;
     }

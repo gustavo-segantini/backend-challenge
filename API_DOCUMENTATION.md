@@ -1279,7 +1279,7 @@ The API implements **IP-based rate limiting** to protect against abuse and ensur
 |----------|-------|--------|-------------|
 | All endpoints | 100 requests | 1 minute | General API limit |
 | All endpoints | 1000 requests | 1 hour | Hourly API limit |
-| `POST /transactions/upload` | 10 requests | 1 minute | File upload limit |
+| `POST /transactions/upload` | 60 requests | 1 minute | File upload limit (1 req/sec) |
 | `POST /auth/login` | 5 requests | 1 minute | Login attempt limit |
 | `POST /auth/register` | 3 requests | 1 hour | Registration limit |
 

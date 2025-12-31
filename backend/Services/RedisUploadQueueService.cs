@@ -35,6 +35,10 @@ public class RedisUploadQueueService(IConnectionMultiplexer redis, ILogger<Redis
                 "Upload message enqueued. UploadId: {UploadId}, MessageId: {MessageId}, StoragePath: {StoragePath}",
                 uploadId, messageId, storagePath);
 
+            // Record metrics
+            CnabApi.Services.Metrics.CnabMetricsService.RecordQueueOperation("enqueue", "success");
+            await UpdateQueueSizeMetricAsync();
+
             return messageId!.ToString();
         }
         catch (Exception ex)
@@ -81,6 +85,10 @@ public class RedisUploadQueueService(IConnectionMultiplexer redis, ILogger<Redis
             logger.LogInformation(
                 "Message dequeued from upload queue. MessageId: {MessageId}, UploadId: {UploadId}, StoragePath: {StoragePath}",
                 message.Id, uploadId, storagePath);
+
+            // Record metrics
+            CnabApi.Services.Metrics.CnabMetricsService.RecordQueueOperation("dequeue", "success");
+            await UpdateQueueSizeMetricAsync();
 
             return (message.Id!.ToString(), uploadId, storagePath ?? string.Empty);
         }
@@ -196,6 +204,20 @@ public class RedisUploadQueueService(IConnectionMultiplexer redis, ILogger<Redis
         {
             logger.LogError(ex, "Error initializing consumer group. ConsumerGroup: {ConsumerGroup}", consumerGroup);
             throw;
+        }
+    }
+
+    private async Task UpdateQueueSizeMetricAsync()
+    {
+        try
+        {
+            var db = redis.GetDatabase();
+            var length = await db.StreamLengthAsync(StreamKey);
+            CnabApi.Services.Metrics.CnabMetricsService.UpdateProcessingQueueSize(length);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to update queue size metric");
         }
     }
 }

@@ -54,6 +54,48 @@ if not exist .env (
 )   
 
 echo.
+echo Verifying monitoring configuration...
+
+REM Verify monitoring directories exist
+if not exist "monitoring\prometheus" (
+    echo Error: monitoring\prometheus directory not found
+    pause
+    exit /b 1
+)
+
+if not exist "monitoring\grafana" (
+    echo Error: monitoring\grafana directory not found
+    pause
+    exit /b 1
+)
+
+if not exist "monitoring\prometheus\prometheus.yml" (
+    echo Error: monitoring\prometheus\prometheus.yml not found
+    pause
+    exit /b 1
+)
+
+if not exist "monitoring\prometheus\alert_rules.yml" (
+    echo Error: monitoring\prometheus\alert_rules.yml not found
+    pause
+    exit /b 1
+)
+
+if not exist "monitoring\grafana\dashboards" (
+    echo Error: monitoring\grafana\dashboards directory not found
+    pause
+    exit /b 1
+)
+
+if not exist "monitoring\grafana\provisioning" (
+    echo Error: monitoring\grafana\provisioning directory not found
+    pause
+    exit /b 1
+)
+
+echo Monitoring configuration verified
+
+echo.
 echo Building and starting services...
 echo (This may take a few minutes on first run)
 echo.
@@ -65,6 +107,33 @@ echo.
 echo Waiting for services to become healthy (30 seconds)...
 timeout /t 30 /nobreak
 
+REM Wait a bit more for Prometheus and Grafana to fully initialize
+echo.
+echo Waiting for monitoring services to initialize (10 seconds)...
+timeout /t 10 /nobreak
+
+REM Verify Prometheus is accessible and reload configuration
+echo.
+echo Verifying Prometheus...
+curl -s http://localhost:9090/-/healthy >nul 2>&1
+if errorlevel 1 (
+    echo Prometheus may still be starting...
+) else (
+    echo Prometheus is running
+    echo Reloading Prometheus configuration...
+    powershell -Command "Invoke-WebRequest -Uri http://localhost:9090/-/reload -Method POST" >nul 2>&1
+    echo Prometheus configuration reloaded
+)
+
+REM Verify Grafana is accessible
+echo Verifying Grafana...
+curl -s http://localhost:3001/api/health >nul 2>&1
+if errorlevel 1 (
+    echo Grafana may still be starting...
+) else (
+    echo Grafana is running
+)
+
 echo.
 echo Setup Complete!
 echo.
@@ -74,14 +143,25 @@ echo    API:           http://localhost:5000
 echo    Swagger Docs:  http://localhost:5000/swagger
 echo    Database:      localhost:5432 (user: postgres, password: postgres)
 echo.
+echo Monitoring ^& Metrics:
+echo    Prometheus:     http://localhost:9090
+echo    Prometheus Rules: http://localhost:9090/rules
+echo    Prometheus Alerts: http://localhost:9090/alerts
+echo    Grafana:       http://localhost:3001 (admin/admin)
+echo    API Metrics:   http://localhost:5000/metrics
+echo.
 echo Useful commands:
 echo    docker-compose logs -f api       # View API logs
 echo    docker-compose logs -f frontend  # View Frontend logs
+echo    docker-compose logs -f prometheus # View Prometheus logs
+echo    docker-compose logs -f grafana   # View Grafana logs
 echo    docker-compose down              # Stop all services
 echo.
 echo Next steps:
 echo    1. Open http://localhost:3000 in your browser
 echo    2. Try uploading a CNAB file
 echo    3. Check the API docs at http://localhost:5000/swagger
+echo    4. View metrics in Grafana: http://localhost:3001
+echo    5. Check Prometheus alerts: http://localhost:9090/alerts
 echo.
 pause

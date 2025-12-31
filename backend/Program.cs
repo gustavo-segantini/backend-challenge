@@ -75,7 +75,7 @@ try
     app.UseCors("ReactPolicy");
     app.UseAuthenticationConfiguration();
     app.MapHealthChecksEndpoints();
-    app.UsePrometheusMetrics();
+    app.UsePrometheusMetrics(); // Must be before MapControllers to capture all HTTP metrics
     app.MapControllers();
 
     // Run database migrations and seeding

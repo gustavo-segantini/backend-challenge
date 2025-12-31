@@ -1,0 +1,187 @@
+{
+  "title": "CNAB API - With Filters",
+  "tags": ["cnab", "api", "filtered"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "templating": {
+    "list": [
+      {
+        "name": "endpoint",
+        "type": "query",
+        "label": "Endpoint",
+        "datasource": "Prometheus",
+        "query": "label_values(http_requests_received_total, route)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "status_code",
+        "type": "query",
+        "label": "Status Code",
+        "datasource": "Prometheus",
+        "query": "label_values(http_requests_received_total, code)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "upload_status",
+        "type": "query",
+        "label": "Upload Status",
+        "datasource": "Prometheus",
+        "query": "label_values(cnab_file_uploads_total, status)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "error_type",
+        "type": "query",
+        "label": "Error Type",
+        "datasource": "Prometheus",
+        "query": "label_values(cnab_processing_errors_total, error_type)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Request Rate (Filtered by Endpoint)",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "rate(http_requests_received_total{route=~\"$endpoint\", code=~\"$status_code\"}[5m])",
+          "legendFormat": "{{route}} - {{code}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {"format": "reqps", "label": "Requests/sec"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Response Time P95 (Filtered)",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{route=~\"$endpoint\"}[5m]))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {"format": "s", "label": "Duration"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 3,
+      "title": "File Upload Rate (Filtered by Status)",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "rate(cnab_file_uploads_total{status=~\"$upload_status\"}[5m])",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {"format": "reqps", "label": "Uploads/sec"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Processing Errors (Filtered by Type)",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {
+          "expr": "rate(cnab_processing_errors_total{error_type=~\"$error_type\"}[5m])",
+          "legendFormat": "{{error_type}} - {{component}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {"format": "reqps", "label": "Errors/sec"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Transaction Processing Rate",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "targets": [
+        {
+          "expr": "rate(cnab_transactions_processed_total[5m])",
+          "legendFormat": "{{type}} - {{status}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {"format": "reqps", "label": "Transactions/sec"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Queue Size & Operations",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "targets": [
+        {
+          "expr": "cnab_processing_queue_size",
+          "legendFormat": "Queue Size",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(cnab_queue_operations_total{operation=\"enqueue\"}[5m])",
+          "legendFormat": "Enqueue Rate",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(cnab_queue_operations_total{operation=\"dequeue\"}[5m])",
+          "legendFormat": "Dequeue Rate",
+          "refId": "C"
+        }
+      ],
+      "yaxes": [
+        {"format": "short", "label": "Count/Rate"},
+        {"format": "short"}
+      ]
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {}
+}

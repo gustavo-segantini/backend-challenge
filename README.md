@@ -34,6 +34,8 @@ A robust, production-ready API for processing and analyzing CNAB files with JWT 
 ✅ **Application Insights** ready for production telemetry  
 ✅ **ProblemDetails RFC 7807** for standardized HTTP responses  
 ✅ **Swagger/OpenAPI** with interactive documentation  
+✅ **Prometheus & Grafana** monitoring with custom metrics and alerting  
+✅ **Load testing** with NBomber for performance evaluation  
 
 ## 🛠️ Technologies
 
@@ -360,6 +362,8 @@ docker-compose up --build
 | **MinIO Console** | http://localhost:9001 | Management UI |
 | **Health Check** | http://localhost:5000/api/v1/health | Application status |
 | **Prometheus Metrics** | http://localhost:5000/metrics | Metrics for Prometheus/Grafana |
+| **Prometheus** | http://localhost:9090 | Metrics collection and querying |
+| **Grafana** | http://localhost:3001 | Monitoring dashboards |
 
 ### Application Health and Monitoring
 
@@ -432,6 +436,106 @@ npm start
 ```
 
 Frontend runs at: http://localhost:3000
+
+## Load Testing
+
+### Quick Start (Zero Configuration!)
+
+Load tests are implemented using [NBomber](https://nbomber.com/) to evaluate API performance under different load conditions.
+
+```bash
+# Navigate to load tests directory
+cd backend.LoadTests
+
+# Run load tests (first time may need to restore packages)
+dotnet run
+```
+
+**That's it!** The script automatically:
+- ✅ Checks if API is accessible
+- ✅ Creates test user if needed (no manual setup!)
+- ✅ Runs all test scenarios
+
+**No configuration needed!** Uses default credentials that are created automatically.
+
+### Test Scenarios
+
+- **Health Check**: 10 req/s for 30 seconds
+- **Get Uploads**: 5 req/s for 60 seconds
+- **Get Transactions**: 5 req/s for 60 seconds
+- **Upload CNAB File**: 1 req/s for 120 seconds
+
+### Monitoring During Tests
+
+**Real-time monitoring with Grafana:**
+1. Open http://localhost:3001 before starting tests
+2. Go to "CNAB API - Overview" dashboard
+3. Watch metrics update in real-time:
+   - Request rate increases during tests
+   - Response time (p95) shows latency
+   - Error rate should stay low
+
+**Or use Prometheus:**
+- Open http://localhost:9090
+- Run queries: `rate(http_requests_received_total[1m])`
+
+### Understanding Results
+
+**Key metrics:**
+- **p95 Response Time**: 95% of requests are faster (most important!)
+- **Success Rate**: Should be > 99%
+- **RPS**: Should match configured rate
+
+**Good performance:**
+- p95 < 100ms: Excellent
+- p95 < 500ms: Good
+- p95 > 1000ms: Needs investigation
+
+### Configuration
+
+Edit `backend.LoadTests/appsettings.json` to configure:
+- API base URL
+- Test user credentials
+- Load test parameters
+
+### Documentation
+
+- **Quick Guide**: [backend.LoadTests/HOW_TO_RUN.md](backend.LoadTests/HOW_TO_RUN.md) - Complete step-by-step guide
+- **README**: [backend.LoadTests/README.md](backend.LoadTests/README.md) - Overview and reference
+
+## Monitoring with Prometheus & Grafana
+
+### Quick Start
+
+```bash
+# Start all services including Prometheus and Grafana
+docker-compose up -d
+
+# Access Grafana
+# URL: http://localhost:3001
+# Default credentials: admin/admin (change in production!)
+```
+
+**Available Dashboards:**
+- **CNAB API - Overview**: HTTP metrics, response times, status codes
+- **CNAB API - Detailed Metrics**: Endpoint-level metrics, database connections
+- **CNAB API - Complete Monitoring**: Comprehensive monitoring view
+- **CNAB API - With Filters**: Interactive dashboards with filters for endpoints, status codes, upload status, and error types
+
+**Prometheus:**
+- URL: http://localhost:9090
+- Scrapes metrics from API every 15 seconds
+- Alert rules configured for error rates, response times, queue backlogs, and service health
+- See [monitoring/prometheus/queries.md](monitoring/prometheus/queries.md) for useful queries with filters
+
+**Custom Metrics:**
+- File upload metrics (rate, size, duration, status)
+- Transaction processing metrics (rate, type, status)
+- Queue metrics (size, operations)
+- Processing error metrics (type, component)
+- API operation metrics (endpoint, method, status)
+
+For detailed setup instructions, see [monitoring/README.md](monitoring/README.md).
 
 ## Tests
 

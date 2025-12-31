@@ -77,6 +77,9 @@ public static class HealthChecksExtensions
     {
         // Configure Prometheus metrics endpoint
         app.UseMetricServer();
+        
+        // Enable HTTP metrics collection
+        app.UseHttpMetrics();
     }
 }
 

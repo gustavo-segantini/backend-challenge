@@ -63,6 +63,9 @@ public class FileUploadTrackingService(
         _db.FileUploads.Add(fileUpload);
         await _db.SaveChangesAsync(cancellationToken);
 
+        // Record metrics
+        CnabApi.Services.Metrics.CnabMetricsService.RecordFileUpload("success", fileSize);
+
         _logger.LogInformation(
             "File upload recorded successfully. Id: {UploadId}, File: {FileName}, Hash: {FileHash}, Lines: {LineCount}",
             fileUpload.Id,
@@ -94,6 +97,10 @@ public class FileUploadTrackingService(
 
         _db.FileUploads.Add(fileUpload);
         await _db.SaveChangesAsync(cancellationToken);
+
+        // Record metrics
+        CnabApi.Services.Metrics.CnabMetricsService.RecordFileUpload("failed", fileSize);
+        CnabApi.Services.Metrics.CnabMetricsService.RecordProcessingError("upload_failed", "FileUploadTrackingService");
 
         _logger.LogWarning(
             "File upload recorded as failed. Id: {UploadId}, File: {FileName}, Error: {ErrorMessage}",

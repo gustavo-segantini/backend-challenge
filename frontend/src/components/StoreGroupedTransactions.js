@@ -44,7 +44,8 @@ function StoreGroupedTransactions({ stores }) {
     return `${card.substring(0, 4)}****${card.substring(card.length - 4)}`;
   };
 
-  if (!stores || stores.length === 0) {
+  // Handle case where stores might be undefined, null, or not an array
+  if (!stores || !Array.isArray(stores) || stores.length === 0) {
     return (
       <div className="store-grouped-container">
         <p className="empty-message">No transactions found. Upload a CNAB file first.</p>

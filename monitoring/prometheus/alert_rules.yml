@@ -1,0 +1,114 @@
+groups:
+  - name: cnab_api_alerts
+    interval: 30s
+    rules:
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_received_total{code=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} req/s (threshold: 0.1 req/s)"
+
+      # Critical Error Rate
+      - alert: CriticalErrorRate
+        expr: rate(http_requests_received_total{code=~"5.."}[5m]) > 1.0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value }} req/s (threshold: 1.0 req/s)"
+
+      # High Response Time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High response time detected"
+          description: "P95 response time is {{ $value }}s (threshold: 2.0s)"
+
+      # File Upload Failures
+      - alert: HighFileUploadFailureRate
+        expr: rate(cnab_file_uploads_total{status="failed"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: upload
+        annotations:
+          summary: "High file upload failure rate"
+          description: "Upload failure rate is {{ $value }} uploads/s (threshold: 0.05 uploads/s)"
+
+      # Processing Queue Backlog
+      - alert: ProcessingQueueBacklog
+        expr: cnab_processing_queue_size > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: queue
+        annotations:
+          summary: "Processing queue backlog detected"
+          description: "Queue size is {{ $value }} messages (threshold: 100)"
+
+      # Critical Queue Backlog
+      - alert: CriticalQueueBacklog
+        expr: cnab_processing_queue_size > 500
+        for: 5m
+        labels:
+          severity: critical
+          component: queue
+        annotations:
+          summary: "Critical processing queue backlog"
+          description: "Queue size is {{ $value }} messages (threshold: 500)"
+
+      # High Processing Error Rate
+      - alert: HighProcessingErrorRate
+        expr: rate(cnab_processing_errors_total[5m]) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: processing
+        annotations:
+          summary: "High processing error rate"
+          description: "Processing error rate is {{ $value }} errors/s (threshold: 1.0 errors/s)"
+
+      # Database Connection Issues
+      - alert: DatabaseUnhealthy
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database is down"
+          description: "PostgreSQL database is not responding"
+
+      # Redis Connection Issues
+      - alert: RedisUnhealthy
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache is not responding"
+
+      # API Down
+      - alert: ApiDown
+        expr: up{job="cnab-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API is down"
+          description: "CNAB API is not responding"
+

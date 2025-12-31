@@ -303,55 +303,65 @@ public class TransactionsController(
     /// first owner found for that store name.
     /// </summary>
     /// <param name="uploadId">The ID of the file upload to get transactions from.</param>
+    /// <param name="page">Page number (1-based). Default: 1.</param>
+    /// <param name="pageSize">Number of stores per page (1-100). Default: 50.</param>
     /// <param name="cancellationToken">Token to cancel the request.</param>
-    /// <returns>List of stores with their transactions and balances.</returns>
+    /// <returns>Paginated list of stores with their transactions and balances.</returns>
     /// <remarks>
     /// **Sample Request:**
     /// ```
-    /// GET /api/v1/transactions/stores/{uploadId}
+    /// GET /api/v1/transactions/stores/{uploadId}?page=1&amp;pageSize=20
     /// Authorization: Bearer {token}
     /// ```
     /// 
     /// **Sample Response (200):**
     /// ```json
-    /// [
-    ///   {
-    ///     "storeName": "BAR DO JOÃO",
-    ///     "storeOwner": "096.206.760-17",
-    ///     "transactions": [
-    ///       {
-    ///         "id": 1,
-    ///         "storeName": "BAR DO JOÃO",
-    ///         "storeOwner": "096.206.760-17",
-    ///         "transactionDate": "2019-03-01T00:00:00Z",
-    ///         "transactionTime": "15:34:53",
-    ///         "amount": 142.00,
-    ///         "natureCode": "3"
-    ///       }
-    ///     ],
-    ///     "balance": -102.00
-    ///   }
-    /// ]
+    /// {
+    ///   "items": [
+    ///     {
+    ///       "storeName": "BAR DO JOÃO",
+    ///       "storeOwner": "096.206.760-17",
+    ///       "transactions": [
+    ///         {
+    ///           "id": 1,
+    ///           "storeName": "BAR DO JOÃO",
+    ///           "storeOwner": "096.206.760-17",
+    ///           "transactionDate": "2019-03-01T00:00:00Z",
+    ///           "transactionTime": "15:34:53",
+    ///           "amount": 142.00,
+    ///           "natureCode": "3"
+    ///         }
+    ///       ],
+    ///       "balance": -102.00
+    ///     }
+    ///   ],
+    ///   "totalCount": 10,
+    ///   "page": 1,
+    ///   "pageSize": 20,
+    ///   "totalPages": 1
+    /// }
     /// ```
     /// </remarks>
     [HttpGet("stores/{uploadId}")]
     [Authorize]
-    [ProducesResponseType(typeof(List<StoreGroupedTransactions>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResponse<StoreGroupedTransactions>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<List<StoreGroupedTransactions>>> GetTransactionsGroupedByStore(
+    public async Task<ActionResult<Models.Responses.PagedResponse<StoreGroupedTransactions>>> GetTransactionsGroupedByStore(
         Guid uploadId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        var result = await _facadeService.GetTransactionsGroupedByStoreAsync(uploadId, cancellationToken);
+        var result = await _facadeService.GetTransactionsGroupedByStoreAsync(uploadId, page, pageSize, cancellationToken);
 
         if (!result.IsSuccess)
         {
             return BadRequest(new { error = result.ErrorMessage });
         }
 
-        if (result.Data == null || result.Data.Count == 0)
+        if (result.Data == null || result.Data.Items == null || !result.Data.Items.Any())
         {
             return NotFound(new { error = "No transactions found for this upload" });
         }

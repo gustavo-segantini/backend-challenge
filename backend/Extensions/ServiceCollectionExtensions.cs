@@ -28,10 +28,29 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Adds core API services (controllers, endpoints explorer).
+    /// Configures request size limits to support large file uploads (up to 2GB).
     /// </summary>
     public static IServiceCollection AddCoreServices(this IServiceCollection services)
     {
-        services.AddControllers();
+        services.AddControllers(options =>
+        {
+            // Configure maximum request body size to 2GB for large CNAB file uploads
+            options.MaxModelValidationErrors = 500;
+        });
+
+        // Configure request body size limits for Kestrel web server
+        services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
+        {
+            options.Limits.MaxRequestBodySize = 2_147_483_648; // 2GB
+        });
+
+        // Configure form options for multipart uploads
+        services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+        {
+            options.ValueLengthLimit = int.MaxValue;
+            options.MultipartBodyLengthLimit = long.MaxValue;
+        });
+
         services.AddEndpointsApiExplorer();
         return services;
     }

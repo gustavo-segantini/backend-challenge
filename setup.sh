@@ -97,8 +97,8 @@ echo ""
 docker-compose up -d --build
 
 echo ""
-echo -e "${YELLOW}Waiting for services to become healthy (30 seconds)...${NC}"
-sleep 30
+echo -e "${YELLOW}Waiting for services to become healthy 15 seconds)...${NC}"
+sleep 15
 
 # Check if services are running
 if docker-compose ps | grep -q "healthy"; then
@@ -109,8 +109,8 @@ fi
 
 # Wait a bit more for Prometheus and Grafana to fully initialize
 echo ""
-echo -e "${YELLOW}Waiting for monitoring services to initialize (10 seconds)...${NC}"
-sleep 10
+echo -e "${YELLOW}Waiting for monitoring services to initialize (5 seconds)...${NC}"
+sleep 5
 
 # Verify Prometheus is accessible
 if curl -s http://localhost:9090/-/healthy > /dev/null 2>&1; then

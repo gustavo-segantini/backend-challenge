@@ -14,7 +14,7 @@ public class CorrelationIdMiddleware(RequestDelegate next)
 
         var correlationId = context.Request.Headers.TryGetValue(correlationIdHeader, out var value)
             ? value.ToString()
-            : Guid.NewGuid().ToString();
+            : Guid.CreateVersion7().ToString();
 
         CorrelationIdHelper.SetCorrelationId(correlationId);
 

@@ -28,7 +28,7 @@ public class UploadProcessingHostedService(
 
     private readonly UploadProcessingOptions _options = options.Value;
     private readonly string _consumerId = $"worker-{Environment.MachineName}-{Process.GetCurrentProcess().Id}";
-    private readonly string _instanceId = Guid.NewGuid().ToString()[..8];
+    private readonly string _instanceId = Guid.CreateVersion7().ToString()[..8];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

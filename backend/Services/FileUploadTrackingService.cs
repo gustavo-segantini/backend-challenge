@@ -50,7 +50,7 @@ public class FileUploadTrackingService(
     {
         var fileUpload = new FileUpload
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             FileName = fileName,
             FileHash = fileHash,
             FileSize = fileSize,
@@ -85,7 +85,7 @@ public class FileUploadTrackingService(
     {
         var fileUpload = new FileUpload
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             FileName = fileName,
             FileHash = fileHash,
             FileSize = fileSize,
@@ -168,7 +168,7 @@ public class FileUploadTrackingService(
 
         var lineHashRecord = new FileUploadLineHash
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             FileUploadId = fileUploadId,
             LineHash = lineHash,
             LineContent = lineContent,
@@ -238,7 +238,7 @@ public class FileUploadTrackingService(
     {
         var fileUpload = new FileUpload
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             FileName = fileName,
             FileHash = fileHash,
             FileSize = fileSize,

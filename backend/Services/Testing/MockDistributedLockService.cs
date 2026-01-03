@@ -52,7 +52,7 @@ public class MockDistributedLockService : IDistributedLockService
 
     public async Task<bool> ExecuteWithLockAsync(string key, Func<Task> action, int expirationSeconds = 300, CancellationToken cancellationToken = default)
     {
-        if (!await AcquireLockAsync(key, Guid.NewGuid().ToString(), expirationSeconds, cancellationToken))
+        if (!await AcquireLockAsync(key, Guid.CreateVersion7().ToString(), expirationSeconds, cancellationToken))
         {
             return false;
         }
@@ -70,7 +70,7 @@ public class MockDistributedLockService : IDistributedLockService
 
     public async Task<(bool LockAcquired, T? Result)> ExecuteWithLockAsync<T>(string key, Func<Task<T>> action, int expirationSeconds = 300, CancellationToken cancellationToken = default)
     {
-        if (!await AcquireLockAsync(key, Guid.NewGuid().ToString(), expirationSeconds, cancellationToken))
+        if (!await AcquireLockAsync(key, Guid.CreateVersion7().ToString(), expirationSeconds, cancellationToken))
         {
             return (false, default);
         }

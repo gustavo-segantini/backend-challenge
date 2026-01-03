@@ -71,14 +71,13 @@ public static class FileServiceExtensions
             );
         }
 
-        // Validate minimum CNAB structure (at least one transaction line)
-        // Note: CNAB format doesn't require a header - each line is a transaction
+        // Validate minimum CNAB structure (at least one header and one transaction record)
         var lines = fileContent.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries);
-        if (lines.Length < 1)
+        if (lines.Length < 2)
         {
             return new FileValidationError(
                 FileValidationErrorCode.InvalidContent,
-                "Invalid CNAB file: must contain at least one transaction record."
+                "Invalid CNAB file: must contain at least one header and one transaction record."
             );
         }
 

@@ -27,7 +27,7 @@ public class MockUploadQueueService : IUploadQueueService
 
     public Task<string> EnqueueUploadAsync(Guid uploadId, string storagePath, CancellationToken cancellationToken)
     {
-        var messageId = Guid.NewGuid().ToString();
+        var messageId = Guid.CreateVersion7().ToString();
         _queue.Enqueue((messageId, uploadId, storagePath));
         _logger.LogInformation("MockUploadQueueService: Enqueued message '{MessageId}' for upload '{UploadId}', StoragePath: '{StoragePath}'", 
             messageId, uploadId, storagePath);

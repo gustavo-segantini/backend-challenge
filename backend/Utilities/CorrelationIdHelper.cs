@@ -16,7 +16,7 @@ public static class CorrelationIdHelper
     {
         if (string.IsNullOrEmpty(CorrelationIdStorage.Value))
         {
-            CorrelationIdStorage.Value = Guid.NewGuid().ToString();
+            CorrelationIdStorage.Value = Guid.CreateVersion7().ToString();
         }
         return CorrelationIdStorage.Value;
     }

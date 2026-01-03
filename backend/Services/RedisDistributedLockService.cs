@@ -84,7 +84,7 @@ public class RedisDistributedLockService(IConnectionMultiplexer redis, ILogger<R
 
     public async Task<bool> ExecuteWithLockAsync(string key, Func<Task> action, int expirationSeconds = 300, CancellationToken cancellationToken = default)
     {
-        var lockValue = Guid.NewGuid().ToString();
+        var lockValue = Guid.CreateVersion7().ToString();
 
         if (!await AcquireLockAsync(key, lockValue, expirationSeconds, cancellationToken))
         {
@@ -108,7 +108,7 @@ public class RedisDistributedLockService(IConnectionMultiplexer redis, ILogger<R
         int expirationSeconds = 300,
         CancellationToken cancellationToken = default)
     {
-        var lockValue = Guid.NewGuid().ToString();
+        var lockValue = Guid.CreateVersion7().ToString();
 
         if (!await AcquireLockAsync(key, lockValue, expirationSeconds, cancellationToken))
         {

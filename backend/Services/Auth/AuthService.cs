@@ -94,7 +94,7 @@ public class AuthService(
             return ServiceResponse<AuthResponse>.Fail(401, "Invalid or expired refresh token.");
 
         storedToken.RevokedAt = DateTime.UtcNow;
-        storedToken.ReplacedByToken = Guid.NewGuid().ToString();
+        storedToken.ReplacedByToken = Guid.CreateVersion7().ToString();
 
         var newRefresh = _tokenService.GenerateRefreshToken();
         storedToken.User.RefreshTokens.Add(newRefresh);
@@ -211,7 +211,7 @@ public class AuthService(
                 GitHubUsername = ghUser.Login,
                 GitHubAvatarUrl = ghUser.AvatarUrl,
                 Role = "User",
-                PasswordHash = Guid.NewGuid().ToString("N")
+                PasswordHash = Guid.CreateVersion7().ToString("N")
             };
             _db.Users.Add(user);
         }

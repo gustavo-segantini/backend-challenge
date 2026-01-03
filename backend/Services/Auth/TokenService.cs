@@ -53,7 +53,7 @@ public class TokenService(IOptions<JwtOptions> jwtOptions) : ITokenService
     {
         return new RefreshToken
         {
-            Token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+            Token = Convert.ToBase64String(Guid.CreateVersion7().ToByteArray()),
             ExpiresAt = DateTime.UtcNow.AddDays(_options.RefreshTokenDays),
             CreatedAt = DateTime.UtcNow
         };

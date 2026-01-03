@@ -8,7 +8,7 @@ public class FileUpload
     /// <summary>
     /// Primary key identifier for the file upload record.
     /// </summary>
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = Guid.CreateVersion7();
 
     /// <summary>
     /// SHA256 hash of the file content (used for duplicate detection).

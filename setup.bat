@@ -104,13 +104,13 @@ REM Start Docker Compose with build
 docker-compose up -d --build
 
 echo.
-echo Waiting for services to become healthy (30 seconds)...
-timeout /t 30 /nobreak
+echo Waiting for services to become healthy (15 seconds)...
+timeout /t 15 /nobreak
 
 REM Wait a bit more for Prometheus and Grafana to fully initialize
 echo.
-echo Waiting for monitoring services to initialize (10 seconds)...
-timeout /t 10 /nobreak
+echo Waiting for monitoring services to initialize (5 seconds)...
+timeout /t 5 /nobreak
 
 REM Verify Prometheus is accessible and reload configuration
 echo.

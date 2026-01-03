@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com)
 [![Tests](https://img.shields.io/badge/tests-603%20passing-brightgreen)](https://github.com)
-[![Coverage](https://img.shields.io/badge/coverage-90.19%25-brightgreen)](https://github.com)
+[![Coverage](https://img.shields.io/badge/coverage-89.94%25-brightgreen)](https://github.com)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 A robust, production-ready API for processing and analyzing CNAB files with JWT authentication, GitHub OAuth, and enterprise-grade features like structured logging, robust validation, and comprehensive tests.
@@ -29,7 +29,7 @@ A robust, production-ready API for processing and analyzing CNAB files with JWT 
 ✅ **Pagination, filtering, and sorting** on transaction queries  
 ✅ **Structured logging** with end-to-end correlation ID (Serilog)  
 ✅ **Robust validation** with FluentValidation (real CPF, credentials)  
-✅ **Comprehensive tests** (603 tests with 90.19% line coverage, 78.04% branch coverage, 93.67% method coverage)  
+✅ **Comprehensive tests** (603 tests with 89.94% line coverage, 78.09% branch coverage, 93.67% method coverage)  
 ✅ **Docker Compose** for development and production  
 ✅ **Application Insights** ready for production telemetry  
 ✅ **ProblemDetails RFC 7807** for standardized HTTP responses  
@@ -580,7 +580,7 @@ The test suite has been optimized for maintainability and coverage:
 
 ### Code Coverage
 
-The project has **80.15% line coverage**, **70.13% branch coverage**, and **88.53% method coverage** (546 tests).
+The project has **89.94% line coverage**, **78.09% branch coverage**, and **93.67% method coverage** (603 tests).
 
 **Current Test Status:**
 - ✅ **603 tests passing**
@@ -782,7 +782,7 @@ backend-challenge/
 ```
 
 **Total tests**: 603 (xUnit + Moq)  
-**Coverage**: 90.19% line, 78.04% branch, 93.67% method
+**Coverage**: 89.94% line, 78.09% branch, 93.67% method
 
 **Test Quality Improvements:**
 - ✅ Consolidated duplicate tests into `[Theory]` tests with `[InlineData]` for better maintainability

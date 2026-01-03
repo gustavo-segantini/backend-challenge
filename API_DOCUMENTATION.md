@@ -1371,8 +1371,8 @@ The project maintains high test coverage to ensure quality and reliability:
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| **Line Coverage** | 90.19% | ✅ Excellent |
-| **Branch Coverage** | 78.04% | ✅ Very Good |
+| **Line Coverage** | 89.94% | ✅ Excellent |
+| **Branch Coverage** | 78.09% | ✅ Very Good |
 | **Method Coverage** | 93.67% | ✅ Excellent |
 | **Total Tests** | 603 | - |
 | **Tests Passed** | 603 | ✅ |
@@ -1495,7 +1495,7 @@ This ensures that metrics reflect only **testable business code**. Infrastructur
 - v1.3.0 (2025-12-29): Upload Management Service Tests
   - Added comprehensive tests for `UploadManagementService` (queries with pagination and filters, incomplete uploads detection, resume operations)
   - Increased test count from 585 to 603 tests
-  - Current coverage: 90.19% line, 78.04% branch, 93.67% method (603 tests)
+  - Current coverage: 89.94% line, 78.09% branch, 93.67% method (603 tests)
 
 ---
 

@@ -9,15 +9,10 @@ namespace CnabApi.Services.Testing;
 /// Provides in-memory queue functionality without requiring Redis.
 /// </summary>
 [ExcludeFromCodeCoverage] // Testing infrastructure - not part of business logic
-public class MockUploadQueueService : IUploadQueueService
+public class MockUploadQueueService(ILogger<MockUploadQueueService> logger) : IUploadQueueService
 {
     private readonly ConcurrentQueue<(string MessageId, Guid UploadId, string StoragePath)> _queue = new();
-    private readonly ILogger<MockUploadQueueService> _logger;
-
-    public MockUploadQueueService(ILogger<MockUploadQueueService> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<MockUploadQueueService> _logger = logger;
 
     public Task InitializeConsumerGroupAsync(string consumerGroup, CancellationToken cancellationToken)
     {

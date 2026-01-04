@@ -1,24 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
 import './App.css';
-import UploadForm from './components/UploadForm';
+import UploadManager from './components/UploadManager';
 import LoginForm from './components/LoginForm';
-import AdminPanel from './components/AdminPanel';
-import Spinner from './components/Spinner';
 import Toast from './components/Toast';
 import api, { setAuthToken, getStoredToken } from './services/api';
 
 function App() {
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [token, setToken] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
-  const [currentView, setCurrentView] = useState('main'); // 'main' or 'admin'
   const loadingUserInfoRef = useRef(false);
 
   const isAuthenticated = Boolean(token);
-  const isAdmin = userInfo?.role === 'Admin';
 
   useEffect(() => {
     const existing = getStoredToken();
@@ -77,6 +72,9 @@ function App() {
     if (success) {
       setMessage(msg);
       setTimeout(() => setMessage(null), 5000);
+    } else {
+      setError(msg || 'Upload failed');
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -85,22 +83,6 @@ function App() {
       <header className="header">
         <h1>Transaction Manager</h1>
         <p>Upload and manage financial transactions</p>
-        {isAuthenticated && (
-          <nav className="main-nav">
-            <button
-              className={`nav-btn ${currentView === 'main' ? 'active' : ''}`}
-              onClick={() => setCurrentView('main')}
-            >
-              Main
-            </button>
-            <button
-              className={`nav-btn ${currentView === 'admin' ? 'active' : ''}`}
-              onClick={() => setCurrentView('admin')}
-            >
-              Administration
-            </button>
-          </nav>
-        )}
       </header>
 
       <main className="container">
@@ -151,22 +133,10 @@ function App() {
           {!isAuthenticated ? (
             <div className="locked-card">
               <h2>Authentication Required</h2>
-              <p>Please log in to upload files and search transactions.</p>
+              <p>Please log in to upload files and manage transactions.</p>
             </div>
-          ) : currentView === 'admin' ? (
-            <AdminPanel userInfo={userInfo} />
           ) : (
-            <>
-              <section className="upload-section">
-                <UploadForm onUpload={handleUpload} isAuthenticated={isAuthenticated} />
-              </section>
-
-              <section className="data-section">
-                <div className="empty-state">
-                  <p>Upload a CNAB file and go to Administration to view transactions grouped by store</p>
-                </div>
-              </section>
-            </>
+            <UploadManager userInfo={userInfo} onUploadSuccess={handleUpload} />
           )}
         </div>
       </main>

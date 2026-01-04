@@ -1,7 +1,9 @@
 using CnabApi.Common;
+using CnabApi.Data;
 using CnabApi.Models;
 using CnabApi.Models.Responses;
 using CnabApi.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace CnabApi.Services;
 
@@ -12,10 +14,12 @@ namespace CnabApi.Services;
 public class UploadManagementService(
     IFileUploadTrackingService fileUploadTrackingService,
     IUploadQueueService uploadQueueService,
+    CnabDbContext dbContext,
     ILogger<UploadManagementService> logger) : IUploadManagementService
 {
     private readonly IFileUploadTrackingService _fileUploadTrackingService = fileUploadTrackingService;
     private readonly IUploadQueueService _uploadQueueService = uploadQueueService;
+    private readonly CnabDbContext _dbContext = dbContext;
     private readonly ILogger<UploadManagementService> _logger = logger;
 
     public async Task<PagedResponse<FileUploadResponse>> GetAllUploadsAsync(
@@ -39,18 +43,17 @@ public class UploadManagementService(
         };
     }
 
-    public async Task<IncompleteUploadsResponse> GetIncompleteUploadsAsync(
+    public async Task<Result<IncompleteUploadsResponse>> GetIncompleteUploadsAsync(
         int timeoutMinutes = 30,
         CancellationToken cancellationToken = default)
     {
         var incompleteUploads = await _fileUploadTrackingService.FindIncompleteUploadsAsync(timeoutMinutes, cancellationToken);
         var result = incompleteUploads.ToResponse().ToList();
 
-        return new IncompleteUploadsResponse
-        {
+        return Result<IncompleteUploadsResponse>.Success(new IncompleteUploadsResponse {
             IncompleteUploads = result,
             Count = result.Count
-        };
+        });
     }
 
     public async Task<Result<ResumeUploadResponse>> ResumeUploadAsync(
@@ -99,7 +102,7 @@ public class UploadManagementService(
         }
     }
 
-    public async Task<ResumeAllUploadsResponse> ResumeAllIncompleteUploadsAsync(
+    public async Task<Result<ResumeAllUploadsResponse>> ResumeAllIncompleteUploadsAsync(
         int timeoutMinutes = 30,
         CancellationToken cancellationToken = default)
     {
@@ -118,13 +121,13 @@ public class UploadManagementService(
             .Select(r => r.Error!)
             .ToList();
 
-        return new ResumeAllUploadsResponse
+        return Result<ResumeAllUploadsResponse>.Success(new ResumeAllUploadsResponse
         {
             Message = $"Resumed {resumedUploads.Count} incomplete upload(s)",
             ResumedCount = resumedUploads.Count,
             ResumedUploads = resumedUploads,
             Errors = errors.Count > 0 ? errors : null
-        };
+        });
     }
 
     private async Task<(ResumedUploadInfo? ResumedUpload, string? Error)> ProcessResumeUploadAsync(
@@ -158,6 +161,50 @@ public class UploadManagementService(
             _logger.LogError(ex, "Error resuming upload. UploadId: {UploadId}", upload.Id);
             return (null, $"Error resuming upload {upload.Id}: {ex.Message}");
         }
+    }
+
+    public async Task<Result<FileUploadResponse>> GetUploadByIdAsync(
+        Guid uploadId,
+        CancellationToken cancellationToken = default)
+    {
+        var upload = await _fileUploadTrackingService.GetUploadByIdAsync(uploadId, cancellationToken);
+
+        if (upload == null)
+        {
+            return Result<FileUploadResponse>.Failure($"Upload with ID {uploadId} not found");
+        }
+
+        // Count actual transactions from database for this upload
+        var actualProcessedCount = await _dbContext.Transactions
+            .Where(t => t.FileUploadId == uploadId)
+            .CountAsync(cancellationToken);
+
+        // Count failed lines (lines that were attempted but failed)
+        // This is stored in FileUploadLineHashes with a specific pattern or we use the FailedLineCount from the entity
+        // For now, we'll use the FailedLineCount from the entity as it's tracked separately
+
+        // Create response with accurate count
+        var response = upload.ToResponse();
+        
+        // Override ProcessedLineCount with actual count from database
+        response.ProcessedLineCount = actualProcessedCount;
+        
+        // Recalculate progress percentage based on actual count
+        if (upload.TotalLineCount > 0)
+        {
+            var totalProcessed = actualProcessedCount + upload.FailedLineCount + upload.SkippedLineCount;
+            response.ProgressPercentage = Math.Round((double)totalProcessed / upload.TotalLineCount * 100, 2);
+        }
+        else
+        {
+            response.ProgressPercentage = 0;
+        }
+
+        _logger.LogDebug(
+            "Retrieved upload status. UploadId: {UploadId}, ActualProcessedCount: {ActualCount}, EntityProcessedCount: {EntityCount}",
+            uploadId, actualProcessedCount, upload.ProcessedLineCount);
+
+        return Result<FileUploadResponse>.Success(response);
     }
 }
 

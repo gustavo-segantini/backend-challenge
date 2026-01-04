@@ -1,4 +1,5 @@
 using CnabApi.Common;
+using CnabApi.Data;
 using CnabApi.Models;
 using CnabApi.Services;
 using CnabApi.Services.Interfaces;
@@ -6,6 +7,7 @@ using CnabApi.Services.LineProcessing;
 using CnabApi.Services.UnitOfWork;
 using FluentAssertions;
 using Moq;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -29,6 +31,7 @@ public class CnabUploadServiceTests
 	private readonly Mock<ILogger<CnabUploadService>> _loggerMock;
 	private readonly CnabUploadService _uploadService;
 	private readonly UploadProcessingOptions _options;
+	private readonly CnabDbContext _dbContext;
 
 	public CnabUploadServiceTests()
 	{
@@ -41,6 +44,12 @@ public class CnabUploadServiceTests
 		_fileUploadTrackingServiceMock = new Mock<IFileUploadTrackingService>();
 		_serviceProviderMock = new Mock<IServiceProvider>();
 		_loggerMock = new Mock<ILogger<CnabUploadService>>();
+
+		// Create in-memory database for CnabDbContext
+		var options = new DbContextOptionsBuilder<CnabDbContext>()
+			.UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+			.Options;
+		_dbContext = new CnabDbContext(options);
 
 		_options = new UploadProcessingOptions
 		{
@@ -117,6 +126,9 @@ public class CnabUploadServiceTests
 		_serviceProviderMock
 			.Setup(x => x.GetService(typeof(IUnitOfWork)))
 			.Returns(unitOfWorkMock);
+		_serviceProviderMock
+			.Setup(x => x.GetService(typeof(CnabDbContext)))
+			.Returns(_dbContext);
 
 		var optionsMock = Mock.Of<IOptions<UploadProcessingOptions>>(x => x.Value == _options);
 

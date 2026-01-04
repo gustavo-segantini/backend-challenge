@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import { useUploadStatusPolling } from '../hooks/useUploadStatusPolling';
 import Spinner from './Spinner';
 import StoreGroupedTransactions from './StoreGroupedTransactions';
-import './AdminPanel.css';
+import './UploadManager.css';
 
-function AdminPanel({ userInfo }) {
-  const [uploads, setUploads] = useState([]);
-  const [incompleteUploads, setIncompleteUploads] = useState([]);
+function UploadManager({ userInfo, onUploadSuccess }) {
+  const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
+  const [uploads, setUploads] = useState([]);
+  const [incompleteUploads, setIncompleteUploads] = useState([]);
+  const [actionLoading, setActionLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
@@ -30,45 +32,11 @@ function AdminPanel({ userInfo }) {
     duplicate: 0,
     partiallyCompleted: 0
   });
+  const [isPollingActive, setIsPollingActive] = useState(false);
 
   const isAdmin = userInfo?.role === 'Admin';
 
-  useEffect(() => {
-    loadUploads();
-    loadIncompleteUploads();
-  }, [page, statusFilter]);
-
-  const loadUploads = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const params = {
-        page,
-        pageSize: 20,
-        ...(statusFilter && { status: statusFilter })
-      };
-      const response = await api.get('/transactions/uploads', { params });
-      setUploads(response.data.items || []);
-      setTotalPages(response.data.totalPages || 1);
-      
-      // Calculate stats from all uploads (would need separate endpoint for accurate stats)
-      calculateStats(response.data.items || []);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load uploads');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadIncompleteUploads = async () => {
-    try {
-      const response = await api.get('/transactions/uploads/incomplete');
-      setIncompleteUploads(response.data.incompleteUploads || []);
-    } catch (err) {
-      console.error('Failed to load incomplete uploads:', err);
-    }
-  };
-
+  // Função para calcular estatísticas
   const calculateStats = (items) => {
     const newStats = {
       total: items.length,
@@ -93,6 +61,193 @@ function AdminPanel({ userInfo }) {
     setStats(newStats);
   };
 
+  // Função para buscar status preciso de um upload individual
+  const fetchUploadStatus = async (uploadId) => {
+    try {
+      const response = await api.get(`/transactions/uploads/${uploadId}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching upload ${uploadId}:`, error);
+      return null;
+    }
+  };
+
+  // Callback para atualização de uploads via polling
+  const handleUploadsUpdate = useCallback(async (updatedUploads, pagedData) => {
+    // Identificar uploads ativos que precisam de contagem precisa
+    const activeUploads = updatedUploads.filter(
+      upload => upload.status === 'Processing' || upload.status === 'Pending'
+    );
+
+    // Se houver uploads ativos, buscar status preciso de cada um
+    if (activeUploads.length > 0) {
+      const preciseStatuses = await Promise.all(
+        activeUploads.map(upload => fetchUploadStatus(upload.id))
+      );
+
+      // Atualizar uploads com informações precisas
+      const updatedWithPrecise = updatedUploads.map(upload => {
+        const preciseStatus = preciseStatuses.find(s => s && s.id === upload.id);
+        if (preciseStatus) {
+          return {
+            ...upload,
+            processedLineCount: preciseStatus.processedLineCount,
+            progressPercentage: preciseStatus.progressPercentage
+          };
+        }
+        return upload;
+      });
+
+      setUploads(updatedWithPrecise);
+      calculateStats(updatedWithPrecise);
+    } else {
+      setUploads(updatedUploads);
+      calculateStats(updatedUploads);
+    }
+
+    if (pagedData) {
+      setTotalPages(pagedData.totalPages || 1);
+    }
+    
+    // Verificar se há uploads ativos para manter o polling
+    const hasActiveUploads = activeUploads.length > 0;
+    setIsPollingActive(hasActiveUploads);
+  }, []);
+
+  // Configurar polling - mais frequente quando há uploads ativos
+  const pollingInterval = isPollingActive ? 2000 : 10000; // 2s se ativo, 10s se inativo
+  
+  useUploadStatusPolling(handleUploadsUpdate, {
+    interval: pollingInterval,
+    enabled: true,
+    statusFilter: statusFilter || null,
+    page,
+    pageSize: 20
+  });
+
+  // Carregar uploads iniciais e incompletos
+  useEffect(() => {
+    loadIncompleteUploads();
+    // O polling vai atualizar os uploads automaticamente
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadUploads = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params = {
+        page,
+        pageSize: 20,
+        ...(statusFilter && { status: statusFilter })
+      };
+      const response = await api.get('/transactions/uploads', { params });
+      setUploads(response.data.items || []);
+      setTotalPages(response.data.totalPages || 1);
+      calculateStats(response.data.items || []);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to load uploads');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadIncompleteUploads = async () => {
+    try {
+      const response = await api.get('/transactions/uploads/incomplete');
+      const incomplete = response.data.incompleteUploads || [];
+      
+      // Buscar status preciso para cada upload incompleto
+      const preciseIncomplete = await Promise.all(
+        incomplete.map(async (upload) => {
+          const preciseStatus = await fetchUploadStatus(upload.id);
+          if (preciseStatus) {
+            return {
+              ...upload,
+              processedLineCount: preciseStatus.processedLineCount,
+              progressPercentage: preciseStatus.progressPercentage
+            };
+          }
+          return upload;
+        })
+      );
+      
+      setIncompleteUploads(preciseIncomplete);
+    } catch (err) {
+      console.error('Failed to load incomplete uploads:', err);
+    }
+  };
+
+  const handleFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setError(null);
+    }
+  };
+
+  const handleClearFile = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setFile(null);
+    setError(null);
+    const fileInput = document.getElementById('file-input');
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!file) {
+      setError('Please select a file');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      setLoading(true);
+      setError(null);
+      setMessage(null);
+
+      const response = await api.post('/transactions/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const message = response.status === 202 
+        ? response.data.message || 'File accepted and queued for background processing'
+        : response.data.message;
+      
+      setMessage(message);
+      if (onUploadSuccess) {
+        onUploadSuccess(true, message);
+      }
+      
+      setFile(null);
+      document.getElementById('file-input').value = '';
+      
+      // Recarregar uploads para mostrar o novo upload
+      setTimeout(() => {
+        loadUploads();
+        loadIncompleteUploads();
+        setIsPollingActive(true); // Ativar polling para acompanhar o novo upload
+      }, 500);
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Error uploading file';
+      setError(errorMsg);
+      if (onUploadSuccess) {
+        onUploadSuccess(false, null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleResumeUpload = async (uploadId) => {
     if (!window.confirm('Resume processing of this upload?')) return;
 
@@ -104,6 +259,7 @@ function AdminPanel({ userInfo }) {
       setTimeout(() => setMessage(null), 5000);
       loadUploads();
       loadIncompleteUploads();
+      setIsPollingActive(true);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to resume upload');
     } finally {
@@ -122,6 +278,7 @@ function AdminPanel({ userInfo }) {
       setTimeout(() => setMessage(null), 5000);
       loadUploads();
       loadIncompleteUploads();
+      setIsPollingActive(true);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to resume uploads');
     } finally {
@@ -154,7 +311,7 @@ function AdminPanel({ userInfo }) {
     if (upload.status === 'Success') {
       setSelectedUploadId(upload.id);
       setSelectedUpload(upload);
-      setTransactionsPage(1); // Reset to first page when selecting new upload
+      setTransactionsPage(1);
       await loadTransactionsForUpload(upload.id, 1);
     } else {
       setSelectedUploadId(null);
@@ -173,7 +330,6 @@ function AdminPanel({ userInfo }) {
       const response = await api.get(`/transactions/stores/${uploadId}`, {
         params: { page, pageSize: 50 }
       });
-      // Backend now returns PagedResponse with items array
       const pagedData = response.data || {};
       setGroupedTransactions(pagedData.items || []);
       setTransactionsTotalPages(pagedData.totalPages || 1);
@@ -215,15 +371,100 @@ function AdminPanel({ userInfo }) {
     }
   };
 
-  return (
-    <div className="admin-panel">
-      <div className="admin-header">
-        <h2>Administration Panel</h2>
-        <p>Manage file uploads and system operations</p>
-      </div>
+  // Verifica se um upload pode ser resumido (está stuck/incompleto)
+  const canResumeUpload = (upload) => {
+    // Se está na lista de incompletos, pode ser resumido (já foi identificado como stuck)
+    const isInIncompleteList = incompleteUploads.some(u => u.id === upload.id);
+    if (isInIncompleteList) {
+      return true;
+    }
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {message && <div className="alert alert-success">{message}</div>}
+    // Se não está em Processing, não pode ser resumido
+    if (upload.status !== 'Processing') {
+      return false;
+    }
+
+    // Se está em Processing mas não tem checkpoint, não pode ser resumido ainda
+    // (ainda não começou a processar ou está no início)
+    if (!upload.lastCheckpointAt || !upload.lastCheckpointLine || upload.lastCheckpointLine === 0) {
+      return false;
+    }
+
+    // Verificar se o processamento começou há mais de 30 minutos
+    // e o último checkpoint foi há mais de 30 minutos - indica que está stuck
+    const now = new Date();
+    const lastCheckpoint = new Date(upload.lastCheckpointAt);
+    const minutesSinceCheckpoint = (now - lastCheckpoint) / (1000 * 60);
+    
+    // Se o checkpoint foi há mais de 30 minutos, o upload está stuck e pode ser resumido
+    // Isso indica que não há progresso há pelo menos 30 minutos
+    return minutesSinceCheckpoint > 30;
+  };
+
+  // Função para calcular a porcentagem de progresso corretamente
+  const calculateProgressPercentage = (upload) => {
+    if (!upload || !upload.totalLineCount || upload.totalLineCount === 0) {
+      return 0;
+    }
+    
+    // Usar processedLineCount como base, mas garantir que não ultrapasse totalLineCount
+    const processed = Math.min(upload.processedLineCount || 0, upload.totalLineCount);
+    const percentage = (processed / upload.totalLineCount) * 100;
+    
+    // Garantir que a porcentagem não ultrapasse 100%
+    return Math.min(Math.round(percentage * 100) / 100, 100);
+  };
+
+  return (
+    <div className="upload-manager">
+      {/* Upload Section */}
+      <section className="upload-section">
+        <form className="upload-form" onSubmit={handleSubmit}>
+          <h2>Upload CNAB File</h2>
+          <p className="upload-description">
+            Select a CNAB file to import financial transactions
+          </p>
+
+          <div className="form-group">
+            <label htmlFor="file-input" className="file-label">
+              <span className="file-icon">📁</span>
+              <span className="file-text">
+                {file ? file.name : 'Choose file or drag and drop'}
+              </span>
+              {file && (
+                <button
+                  type="button"
+                  className="file-clear-btn"
+                  onClick={handleClearFile}
+                  disabled={loading}
+                  aria-label="Clear file selection"
+                >
+                  ✕
+                </button>
+              )}
+            </label>
+            <input
+              id="file-input"
+              type="file"
+              onChange={handleFileChange}
+              disabled={loading}
+              className="file-input"
+              accept=".txt"
+            />
+          </div>
+
+          {error && <div className="error-message">{error}</div>}
+          {message && <div className="success-message">{message}</div>}
+
+          <button
+            type="submit"
+            className="btn-upload"
+            disabled={!file || loading}
+          >
+            {loading ? 'Uploading...' : 'Upload File'}
+          </button>
+        </form>
+      </section>
 
       {/* Statistics Cards */}
       <div className="stats-grid">
@@ -252,6 +493,14 @@ function AdminPanel({ userInfo }) {
           <p className="stat-value incomplete">{incompleteUploads.length}</p>
         </div>
       </div>
+
+      {/* Real-time Status Indicator */}
+      {isPollingActive && (
+        <div className="realtime-indicator">
+          <span className="pulse-dot"></span>
+          <span>Monitoring uploads in real-time</span>
+        </div>
+      )}
 
       {/* Actions Section */}
       {isAdmin && (
@@ -308,7 +557,7 @@ function AdminPanel({ userInfo }) {
                         <div
                           className="progress-fill"
                           style={{
-                            width: `${upload.progressPercentage || 0}%`,
+                            width: `${calculateProgressPercentage(upload)}%`,
                             backgroundColor: upload.status === 'Processing' ? '#3498db' : '#e74c3c'
                           }}
                         />
@@ -423,7 +672,7 @@ function AdminPanel({ userInfo }) {
                               <div
                                 className="progress-fill"
                                 style={{
-                                  width: `${upload.progressPercentage || 0}%`,
+                                  width: `${calculateProgressPercentage(upload)}%`,
                                   backgroundColor:
                                     upload.status === 'Processing' ? '#3498db' :
                                     upload.status === 'Success' ? '#27ae60' :
@@ -432,7 +681,7 @@ function AdminPanel({ userInfo }) {
                                 }}
                               />
                               <span className="progress-text">
-                                {upload.progressPercentage || 0}%
+                                {calculateProgressPercentage(upload).toFixed(2)}%
                               </span>
                             </div>
                           ) : (
@@ -458,7 +707,7 @@ function AdminPanel({ userInfo }) {
                         <td>{formatDate(upload.uploadedAt)}</td>
                         <td>{formatDate(upload.processingCompletedAt)}</td>
                         <td>
-                          {upload.status === 'Processing' && upload.lastCheckpointLine > 0 && isAdmin && (
+                          {canResumeUpload(upload) && isAdmin && (
                             <button
                               className="btn btn-sm btn-primary"
                               onClick={(e) => {
@@ -466,13 +715,18 @@ function AdminPanel({ userInfo }) {
                                 handleResumeUpload(upload.id);
                               }}
                               disabled={actionLoading}
-                              title={`Resume from line ${upload.lastCheckpointLine}`}
+                              title={`Resume from line ${upload.lastCheckpointLine || 0}`}
                             >
                               Resume
                             </button>
                           )}
                           {upload.status === 'Success' && (
                             <span className="select-hint">Click to view summary</span>
+                          )}
+                          {upload.status === 'Processing' && !canResumeUpload(upload) && (
+                            <span className="text-muted" style={{ fontSize: '11px' }}>
+                              Processing...
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -554,5 +808,5 @@ function AdminPanel({ userInfo }) {
   );
 }
 
-export default AdminPanel;
+export default UploadManager;
 

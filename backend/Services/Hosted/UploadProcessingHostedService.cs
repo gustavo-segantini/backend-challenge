@@ -1,6 +1,8 @@
 using CnabApi.Models;
 using CnabApi.Services.Interfaces;
+using CnabApi.Utilities;
 using Microsoft.Extensions.Options;
+using Serilog.Context;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
@@ -32,48 +34,52 @@ public class UploadProcessingHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation(
-            "Upload processing service started. ConsumerId: {ConsumerId}, InstanceId: {InstanceId}, ParallelWorkers: {Workers}, CheckpointInterval: {Interval}",
-            _consumerId, _instanceId, _options.ParallelWorkers, _options.CheckpointInterval);
-
-        try
+        var correlationId = CorrelationIdHelper.GetOrCreateCorrelationId();
+        using (LogContext.PushProperty("CorrelationId", correlationId))
         {
-            await queueService.InitializeConsumerGroupAsync(ConsumerGroup, stoppingToken);
+            logger.LogInformation(
+                "Upload processing service started. ConsumerId: {ConsumerId}, InstanceId: {InstanceId}, ParallelWorkers: {Workers}, CheckpointInterval: {Interval}",
+                _consumerId, _instanceId, _options.ParallelWorkers, _options.CheckpointInterval);
 
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    var message = await queueService.DequeueUploadAsync(ConsumerGroup, _consumerId, stoppingToken);
+                await queueService.InitializeConsumerGroupAsync(ConsumerGroup, stoppingToken);
 
-                    if (message == null)
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    try
                     {
-                        await Task.Delay(PollingIntervalMs, stoppingToken);
-                        continue;
-                    }
+                        var message = await queueService.DequeueUploadAsync(ConsumerGroup, _consumerId, stoppingToken);
 
-                    await ProcessUploadMessageAsync(message.Value, stoppingToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    logger.LogInformation("Upload processing service cancellation requested");
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Unexpected error in upload processing loop. Will continue processing.");
-                    await Task.Delay(PollingIntervalMs, stoppingToken);
+                        if (message == null)
+                        {
+                            await Task.Delay(PollingIntervalMs, stoppingToken);
+                            continue;
+                        }
+
+                        await ProcessUploadMessageAsync(message.Value, stoppingToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        logger.LogInformation("Upload processing service cancellation requested");
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Unexpected error in upload processing loop. Will continue processing.");
+                        await Task.Delay(PollingIntervalMs, stoppingToken);
+                    }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            logger.LogCritical(ex, "Critical error in upload processing service");
-            throw;
-        }
-        finally
-        {
-            logger.LogInformation("Upload processing service stopped. InstanceId: {InstanceId}", _instanceId);
+            catch (Exception ex)
+            {
+                logger.LogCritical(ex, "Critical error in upload processing service");
+                throw;
+            }
+            finally
+            {
+                logger.LogInformation("Upload processing service stopped. InstanceId: {InstanceId}", _instanceId);
+            }
         }
     }
 
@@ -86,26 +92,33 @@ public class UploadProcessingHostedService(
     {
         var (messageId, uploadId, storagePath) = message;
         var lockKey = $"upload:processing:{uploadId}";
-
-        logger.LogInformation(
-            "Processing upload message. UploadId: {UploadId}, MessageId: {MessageId}, StoragePath: {StoragePath}",
-            uploadId, messageId, storagePath);
-
-        var (lockAcquired, _) = await lockService.ExecuteWithLockAsync<object?>(
-            lockKey,
-            async () =>
-            {
-                await ProcessUploadWithRetryAsync(uploadId, storagePath, messageId, stoppingToken);
-                return null;
-            },
-            expirationSeconds: ProcessingTimeoutSeconds,
-            cancellationToken: stoppingToken);
-
-        if (!lockAcquired)
+        
+        // Create a new CorrelationId for this upload processing operation
+        var correlationId = CorrelationIdHelper.GetOrCreateCorrelationId();
+        CorrelationIdHelper.SetCorrelationId(correlationId);
+        
+        using (LogContext.PushProperty("CorrelationId", correlationId))
         {
-            logger.LogWarning(
-                "Could not acquire processing lock for upload. UploadId: {UploadId}. May be processing in another instance.",
-                uploadId);
+            logger.LogInformation(
+                "Processing upload message. UploadId: {UploadId}, MessageId: {MessageId}, StoragePath: {StoragePath}",
+                uploadId, messageId, storagePath);
+
+            var (lockAcquired, _) = await lockService.ExecuteWithLockAsync<object?>(
+                lockKey,
+                async () =>
+                {
+                    await ProcessUploadWithRetryAsync(uploadId, storagePath, messageId, stoppingToken);
+                    return null;
+                },
+                expirationSeconds: ProcessingTimeoutSeconds,
+                cancellationToken: stoppingToken);
+
+            if (!lockAcquired)
+            {
+                logger.LogWarning(
+                    "Could not acquire processing lock for upload. UploadId: {UploadId}. May be processing in another instance.",
+                    uploadId);
+            }
         }
     }
 

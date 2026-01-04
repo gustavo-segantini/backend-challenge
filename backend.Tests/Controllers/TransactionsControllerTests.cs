@@ -442,7 +442,7 @@ public class TransactionsControllerTests
 
         _uploadManagementServiceMock
             .Setup(x => x.GetIncompleteUploadsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(incompleteResponse);
+            .ReturnsAsync(Result<IncompleteUploadsResponse>.Success(incompleteResponse));
 
         // Act
         var result = await _controller.GetIncompleteUploads(30, CancellationToken.None);
@@ -467,7 +467,7 @@ public class TransactionsControllerTests
 
         _uploadManagementServiceMock
             .Setup(x => x.GetIncompleteUploadsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(incompleteResponse);
+            .ReturnsAsync(Result<IncompleteUploadsResponse>.Success(incompleteResponse));
 
         // Act
         var result = await _controller.GetIncompleteUploads(30, CancellationToken.None);
@@ -492,7 +492,7 @@ public class TransactionsControllerTests
 
         _uploadManagementServiceMock
             .Setup(x => x.GetIncompleteUploadsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(incompleteResponse);
+            .ReturnsAsync(Result<IncompleteUploadsResponse>.Success(incompleteResponse));
 
         // Act
         await _controller.GetIncompleteUploads(60, CancellationToken.None);
@@ -628,7 +628,7 @@ public class TransactionsControllerTests
 
         _uploadManagementServiceMock
             .Setup(x => x.ResumeAllIncompleteUploadsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(resumeResponse);
+            .ReturnsAsync(Result<ResumeAllUploadsResponse>.Success(resumeResponse));
 
         // Act
         var result = await _controller.ResumeAllIncompleteUploads(30, CancellationToken.None);
@@ -666,7 +666,7 @@ public class TransactionsControllerTests
 
         _uploadManagementServiceMock
             .Setup(x => x.ResumeAllIncompleteUploadsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(resumeResponse);
+            .ReturnsAsync(Result<ResumeAllUploadsResponse>.Success(resumeResponse));
 
         // Act
         var result = await _controller.ResumeAllIncompleteUploads(30, CancellationToken.None);
@@ -703,7 +703,7 @@ public class TransactionsControllerTests
 
         _uploadManagementServiceMock
             .Setup(x => x.ResumeAllIncompleteUploadsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(resumeResponse);
+            .ReturnsAsync(Result<ResumeAllUploadsResponse>.Success(resumeResponse));
 
         // Act
         var result = await _controller.ResumeAllIncompleteUploads(30, CancellationToken.None);

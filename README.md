@@ -7,6 +7,8 @@
 
 A robust, production-ready API for processing and analyzing CNAB files with JWT authentication, GitHub OAuth, and enterprise-grade features like structured logging, robust validation, and comprehensive tests.
 
+![demonstration](images/demonstration.gif)
+
 ## 📋 Table of Contents
 
 - [Overview](#overview)
@@ -61,37 +63,7 @@ A robust, production-ready API for processing and analyzing CNAB files with JWT 
 
 The CNAB Parser API follows a **layered architecture** with clear separation of concerns:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Presentation Layer                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Controllers  │  │  Middleware  │  │   Swagger    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────────┐
-│                    Application Layer                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   Facades    │  │   Services   │  │  Validators  │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────────┐
-│                      Domain Layer                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   Models     │  │  Business    │  │  Interfaces  │      │
-│  │              │  │   Logic      │  │              │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────────┐
-│                   Infrastructure Layer                       │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   EF Core    │  │    Redis     │  │    MinIO     │      │
-│  │  PostgreSQL  │  │   Streams    │  │   Storage    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-```
+![layered-architecture](images/layered-architecture.png)
 
 ### Key Components
 
@@ -124,105 +96,28 @@ The CNAB Parser API follows a **layered architecture** with clear separation of 
 - `UploadProcessingHostedService`: Processes uploads from Redis queue
 - `IncompleteUploadRecoveryService`: Recovers incomplete uploads automatically
 
-### Processing Flow
+### 🎨 Visual Architecture Diagrams
 
-#### **1. File Upload Flow (Synchronous Phase)**
+The system architecture is documented with interactive diagrams in [processing-flow.drawio](processing-flow.drawio):
 
-```
-Client Request
-    │
-    ├─► [TransactionsController.UploadCnabFile]
-    │       │
-    │       ├─► [TransactionFacadeService.UploadCnabFileAsync]
-    │       │       │
-    │       │       ├─► Validate multipart/form-data
-    │       │       ├─► Read and validate file (FileUploadService)
-    │       │       ├─► Calculate SHA256 hash (HashService)
-    │       │       ├─► Check for duplicates (FileUploadTrackingService)
-    │       │       │
-    │       │       ├─► [Phase 1] Store file in MinIO
-    │       │       │       └─► MinioStorageService.UploadFileAsync
-    │       │       │
-    │       │       ├─► [Phase 2] Create FileUpload record (Status: Pending)
-    │       │       │       └─► FileUploadTrackingService.RecordPendingUploadAsync
-    │       │       │
-    │       │       └─► [Phase 3] Enqueue for background processing
-    │       │               └─► RedisUploadQueueService.EnqueueUploadAsync
-    │       │
-    │       └─► Return 202 Accepted (file queued)
-    │
-    └─► Response: { message: "File accepted and queued", status: "processing" }
-```
+1. **Data Flow Architecture** - Simplified overview of how data flows through the system:
+   - Client (Browser) → ASP.NET Core API → MinIO & Redis → Background Processing → PostgreSQL
+   - Shows synchronous and asynchronous phases
+   - Open in [app.diagrams.net](https://app.diagrams.net) for interactive viewing
 
-#### **2. Background Processing Flow (Asynchronous Phase)**
+2. **Detailed Processing Flow** - Complete 4-phase flow with all operations:
+   - Phase 1: Upload & Validation (Synchronous)
+   - Phase 2: Storage & Queue (Synchronous)
+   - Phase 3: Background Processing (Asynchronous with parallel workers)
+   - Phase 4: Automatic Recovery (Background service)
 
-```
-Redis Queue (Streams)
-    │
-    ├─► [UploadProcessingHostedService] (Background Worker)
-    │       │
-    │       ├─► Dequeue message from Redis Streams
-    │       │       └─► RedisUploadQueueService.DequeueUploadAsync
-    │       │
-    │       ├─► Acquire distributed lock
-    │       │       └─► RedisDistributedLockService.ExecuteWithLockAsync
-    │       │
-    │       ├─► Update status: Pending → Processing
-    │       │       └─► FileUploadTrackingService.UpdateProcessingStatusAsync
-    │       │
-    │       ├─► Download file from MinIO
-    │       │       └─► MinioStorageService.DownloadFileAsync
-    │       │
-    │       ├─► Check for checkpoint (resume from last processed line)
-    │       │       └─► FileUpload.LastCheckpointLine
-    │       │
-    │       └─► [CnabUploadService.ProcessCnabUploadAsync]
-    │               │
-    │               ├─► Split file into lines
-    │               │
-    │               ├─► Process lines in parallel (ParallelWorkers)
-    │               │       │
-    │               │       └─► [LineProcessor.ProcessLineAsync]
-    │               │               │
-    │               │               ├─► Validate line format (80 chars)
-    │               │               ├─► Parse CNAB line (CnabParserService)
-    │               │               ├─► Generate idempotency key (fileHash + lineIndex)
-    │               │               ├─► Check for duplicate line
-    │               │               │
-    │               │               └─► [Unit of Work - ACID Transaction]
-    │               │                       ├─► Insert Transaction
-    │               │                       └─► Record line hash
-    │               │
-    │               ├─► Save checkpoint periodically
-    │               │       └─► CheckpointManager.SaveCheckpointAsync
-    │               │
-    │               └─► Update status: Processing → Success/Failed
-    │                       └─► FileUploadTrackingService.UpdateProcessingSuccessAsync
-    │
-    └─► Acknowledge message in Redis queue
-            └─► RedisUploadQueueService.AcknowledgeMessageAsync
-```
+To view the diagrams:
+```bash
+# Option 1: Open in draw.io online
+# Visit https://app.diagrams.net and open "processing-flow.drawio"
 
-#### **3. Incomplete Upload Recovery Flow**
-
-```
-[IncompleteUploadRecoveryService] (Runs every 5 minutes)
-    │
-    ├─► Find uploads stuck in "Processing" status
-    │       └─► FileUploadTrackingService.FindIncompleteUploadsAsync
-    │               └─► Criteria: Status=Processing AND LastCheckpointAt > 30min ago
-    │
-    ├─► For each incomplete upload:
-    │       │
-    │       ├─► Check if lock exists (another worker processing)
-    │       │       └─► Skip if locked
-    │       │
-    │       ├─► Verify checkpoint age (avoid race conditions)
-    │       │
-    │       └─► Re-enqueue for processing
-    │               └─► RedisUploadQueueService.EnqueueUploadAsync
-    │
-    └─► Log recovery statistics
+# Option 2: View in VS Code (with draw.io extension)
+# Open "processing-flow.drawio" directly
 ```
 
 ### Key Features
@@ -251,58 +146,20 @@ Redis Queue (Streams)
 - **Graceful Degradation**: MinIO failures don't block uploads
 - **Automatic Recovery**: Incomplete uploads automatically re-enqueued
 
-### Data Flow Diagram
+### Processing Flow
 
-```
-┌─────────────┐
-│   Client    │
-│  (Browser)  │
-└──────┬──────┘
-       │ POST /api/v1/transactions/upload
-       │ multipart/form-data
-       ▼
-┌─────────────────────────────────────┐
-│   ASP.NET Core API                  │
-│   ┌───────────────────────────────┐   │
-│   │ TransactionsController       │   │
-│   └───────────┬─────────────────┘   │
-│               │                      │
-│   ┌───────────▼─────────────────┐   │
-│   │ TransactionFacadeService     │   │
-│   │ 1. Validate file            │   │
-│   │ 2. Check duplicates         │   │
-│   │ 3. Store in MinIO           │   │
-│   │ 4. Create FileUpload record  │   │
-│   │ 5. Enqueue to Redis          │   │
-│   └───────────┬─────────────────┘   │
-└───────────────┼──────────────────────┘
-                │
-                ├──────────────────────┐
-                │                      │
-                ▼                      ▼
-        ┌──────────────┐      ┌──────────────┐
-        │    MinIO     │      │    Redis     │
-        │  (Storage)   │      │   (Queue)    │
-        └──────────────┘      └──────┬───────┘
-                                     │
-                                     │ Background Worker
-                                     ▼
-                        ┌─────────────────────────────┐
-                        │ UploadProcessingHostedService│
-                        │ 1. Dequeue message          │
-                        │ 2. Download from MinIO       │
-                        │ 3. Process lines             │
-                        │ 4. Save to PostgreSQL        │
-                        └───────────┬─────────────────┘
-                                    │
-                                    ▼
-                        ┌─────────────────────────────┐
-                        │     PostgreSQL              │
-                        │  - Transactions             │
-                        │  - FileUploads              │
-                        │  - FileUploadLineHashes     │
-                        └─────────────────────────────┘
-```
+For a detailed step-by-step breakdown of the upload and processing flow, see the interactive diagrams in [processing-flow.drawio](processing-flow.drawio):
+
+- **Upload Phase**: File validation, hashing, duplicate checking
+- **Storage Phase**: MinIO storage, database record creation, Redis queue enqueuing
+- **Background Processing Phase**: Queue consumption, parallel line processing, checkpoint management
+- **Recovery Phase**: Automatic detection and re-processing of stuck uploads
+
+Each step includes:
+- Specific service/method calls
+- Database operations (ACID transactions)
+- Error handling and retry logic
+- Idempotency checks
 
 ### Technology Stack Details
 
@@ -626,14 +483,37 @@ Infrastructure code marked with `[ExcludeFromCodeCoverage]`:
 
 This ensures coverage reflects only **testable business code**. Infrastructure components that require external services (Redis, MinIO) are excluded and should be tested with integration tests.
 
-## Main Endpoints
+## 📡 Main Endpoints
 
-- `POST /api/v1/transactions/upload` — upload CNAB file (returns 202 Accepted for async processing)
-- `GET /api/v1/transactions/stores/{uploadId}` — get transactions grouped by store with pagination
-- `GET /api/v1/transactions/uploads` — list all file uploads with status
-- `POST /api/v1/transactions/uploads/{uploadId}/resume` — resume incomplete upload processing
-- `POST /api/v1/transactions/uploads/resume-all` — resume all incomplete uploads
-- `DELETE /api/v1/transactions` — clear all data (Admin only)
+### File Upload & Management
+- `POST /api/v1/transactions/upload` — Upload CNAB file for processing (returns 202 Accepted for async)
+- `GET /api/v1/transactions/uploads` — List all file uploads with pagination and optional status filter
+- `GET /api/v1/transactions/uploads/{uploadId}` — Get detailed information about a specific upload
+- `GET /api/v1/transactions/uploads/incomplete` — List uploads stuck in Processing status (incomplete)
+- `POST /api/v1/transactions/uploads/{uploadId}/resume` — Resume processing of a specific incomplete upload
+- `POST /api/v1/transactions/uploads/resume-all` — Resume processing of all incomplete uploads
+
+### Transaction Queries
+- `GET /api/v1/transactions/stores/{uploadId}` — Get transactions grouped by store with pagination and balance calculation
+
+### Admin Operations
+- `DELETE /api/v1/transactions` — Clear all transactions and uploads (Admin only)
+
+### Authentication
+- `POST /api/v1/auth/register` — Register new user
+- `POST /api/v1/auth/login` — Login with username/password
+- `POST /api/v1/auth/refresh` — Refresh JWT token
+- `GET /api/v1/auth/me` — Get authenticated user profile
+- `POST /api/v1/auth/logout` — Logout and invalidate refresh token
+- `GET /api/v1/auth/github/login` — GitHub OAuth login redirect
+
+### Health & Monitoring
+- `GET /api/v1/health` — Check application health status
+- `GET /api/v1/health/ready` — Kubernetes readiness probe
+- `GET /api/v1/health/live` — Kubernetes liveness probe
+- `GET /metrics` — Prometheus metrics for monitoring
+
+**Full API Documentation**: [API_DOCUMENTATION.md](API_DOCUMENTATION.md) | **Interactive Docs**: Swagger at `/swagger`
 
 ### Upload Processing Modes
 
@@ -643,14 +523,12 @@ The API supports two processing modes:
    - File is validated and stored immediately
    - Returns `202 Accepted` with upload ID
    - Processing happens in background via Redis queue
-   - Check upload status via `GET /api/v1/transactions/uploads/{uploadId}`
+   - Monitor progress via `GET /api/v1/transactions/uploads/{uploadId}`
 
 2. **Synchronous Processing (Test Environment)**:
    - File is processed immediately
    - Returns `200 OK` with transaction count
-   - Used for integration tests
-
-Details: [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
+   - Used for integration tests and load testing
 
 ## Environment Variables
 

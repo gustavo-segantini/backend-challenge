@@ -1,9 +1,11 @@
 using CnabApi.Common;
+using CnabApi.Data;
 using CnabApi.Models;
 using CnabApi.Models.Responses;
 using CnabApi.Services;
 using CnabApi.Services.Interfaces;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -18,6 +20,7 @@ public class UploadManagementServiceTests
     private readonly Mock<IFileUploadTrackingService> _fileUploadTrackingServiceMock;
     private readonly Mock<IUploadQueueService> _uploadQueueServiceMock;
     private readonly Mock<ILogger<UploadManagementService>> _loggerMock;
+    private readonly CnabDbContext _dbContext;
     private readonly UploadManagementService _service;
 
     public UploadManagementServiceTests()
@@ -25,9 +28,16 @@ public class UploadManagementServiceTests
         _fileUploadTrackingServiceMock = new Mock<IFileUploadTrackingService>();
         _uploadQueueServiceMock = new Mock<IUploadQueueService>();
         _loggerMock = new Mock<ILogger<UploadManagementService>>();
+        
+        var options = new DbContextOptionsBuilder<CnabDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        _dbContext = new CnabDbContext(options);
+        
         _service = new UploadManagementService(
             _fileUploadTrackingServiceMock.Object,
             _uploadQueueServiceMock.Object,
+            _dbContext,
             _loggerMock.Object);
     }
 
@@ -192,10 +202,12 @@ public class UploadManagementServiceTests
 
         // Assert
         result.Should().NotBeNull();
-        result.IncompleteUploads.Should().HaveCount(1);
-        result.Count.Should().Be(1);
-        result.IncompleteUploads.First().FileName.Should().Be("incomplete1.txt");
-        result.IncompleteUploads.First().Status.Should().Be("Processing");
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.IncompleteUploads.Should().HaveCount(1);
+        result.Data.Count.Should().Be(1);
+        result.Data.IncompleteUploads.First().FileName.Should().Be("incomplete1.txt");
+        result.Data.IncompleteUploads.First().Status.Should().Be("Processing");
     }
 
     [Fact]
@@ -227,8 +239,10 @@ public class UploadManagementServiceTests
 
         // Assert
         result.Should().NotBeNull();
-        result.IncompleteUploads.Should().HaveCount(1);
-        result.Count.Should().Be(1);
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.IncompleteUploads.Should().HaveCount(1);
+        result.Data.Count.Should().Be(1);
     }
 
     [Fact]
@@ -246,8 +260,10 @@ public class UploadManagementServiceTests
 
         // Assert
         result.Should().NotBeNull();
-        result.IncompleteUploads.Should().BeEmpty();
-        result.Count.Should().Be(0);
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.IncompleteUploads.Should().BeEmpty();
+        result.Data.Count.Should().Be(0);
     }
 
     #endregion
@@ -517,16 +533,18 @@ public class UploadManagementServiceTests
 
         // Assert
         result.Should().NotBeNull();
-        result.ResumedCount.Should().Be(2);
-        result.ResumedUploads.Should().HaveCount(2);
-        result.Errors.Should().BeNull();
-        result.Message.Should().Contain("Resumed 2 incomplete upload(s)");
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.ResumedCount.Should().Be(2);
+        result.Data.ResumedUploads.Should().HaveCount(2);
+        result.Data.Errors.Should().BeNull();
+        result.Data.Message.Should().Contain("Resumed 2 incomplete upload(s)");
 
-        var resumed1 = result.ResumedUploads.First(u => u.UploadId == upload1.Id);
+        var resumed1 = result.Data.ResumedUploads.First(u => u.UploadId == upload1.Id);
         resumed1.FileName.Should().Be("resume1.txt");
         resumed1.WillResumeFromLine.Should().Be(5);
 
-        var resumed2 = result.ResumedUploads.First(u => u.UploadId == upload2.Id);
+        var resumed2 = result.Data.ResumedUploads.First(u => u.UploadId == upload2.Id);
         resumed2.FileName.Should().Be("resume2.txt");
         resumed2.WillResumeFromLine.Should().Be(10);
     }
@@ -546,10 +564,12 @@ public class UploadManagementServiceTests
 
         // Assert
         result.Should().NotBeNull();
-        result.ResumedCount.Should().Be(0);
-        result.ResumedUploads.Should().BeEmpty();
-        result.Errors.Should().BeNull();
-        result.Message.Should().Contain("Resumed 0 incomplete upload(s)");
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.ResumedCount.Should().Be(0);
+        result.Data.ResumedUploads.Should().BeEmpty();
+        result.Data.Errors.Should().BeNull();
+        result.Data.Message.Should().Contain("Resumed 0 incomplete upload(s)");
     }
 
     [Fact]
@@ -595,12 +615,14 @@ public class UploadManagementServiceTests
 
         // Assert
         result.Should().NotBeNull();
-        result.ResumedCount.Should().Be(1);
-        result.ResumedUploads.Should().HaveCount(1);
-        result.Errors.Should().NotBeNull();
-        result.Errors.Should().HaveCount(1);
-        result.Errors!.First().Should().Contain("does not have a storage path");
-        result.Message.Should().Contain("Resumed 1 incomplete upload(s)");
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.ResumedCount.Should().Be(1);
+        result.Data.ResumedUploads.Should().HaveCount(1);
+        result.Data.Errors.Should().NotBeNull();
+        result.Data.Errors.Should().HaveCount(1);
+        result.Data.Errors!.First().Should().Contain("does not have a storage path");
+        result.Data.Message.Should().Contain("Resumed 1 incomplete upload(s)");
     }
 
     [Fact]
@@ -651,12 +673,14 @@ public class UploadManagementServiceTests
 
         // Assert
         result.Should().NotBeNull();
-        result.ResumedCount.Should().Be(1);
-        result.ResumedUploads.Should().HaveCount(1);
-        result.Errors.Should().NotBeNull();
-        result.Errors.Should().HaveCount(1);
-        result.Errors!.First().Should().Contain("Error resuming upload");
-        result.Errors.First().Should().Contain(errorMessage);
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.ResumedCount.Should().Be(1);
+        result.Data.ResumedUploads.Should().HaveCount(1);
+        result.Data.Errors.Should().NotBeNull();
+        result.Data.Errors.Should().HaveCount(1);
+        result.Data.Errors!.First().Should().Contain("Error resuming upload");
+        result.Data.Errors.First().Should().Contain(errorMessage);
     }
 
     [Fact]
@@ -691,8 +715,10 @@ public class UploadManagementServiceTests
 
         // Assert
         result.Should().NotBeNull();
-        result.ResumedCount.Should().Be(1);
-        result.ResumedUploads.Should().HaveCount(1);
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.ResumedCount.Should().Be(1);
+        result.Data.ResumedUploads.Should().HaveCount(1);
     }
 
     #endregion

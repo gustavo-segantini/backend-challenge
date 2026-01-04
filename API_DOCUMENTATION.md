@@ -627,6 +627,69 @@ curl -X GET "http://localhost:5000/api/v1/transactions/uploads?status=Processing
 
 ---
 
+### GET /transactions/uploads/{uploadId}
+
+Get detailed information about a specific upload.
+
+**Endpoint**: `GET /api/v1/transactions/uploads/{uploadId}`
+
+**Path Parameters**:
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| uploadId | UUID | The ID of the upload to retrieve |
+
+**Headers** (REQUIRED):
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response** (200 OK):
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "fileName": "20251229143025",
+  "status": "Processing",
+  "fileSize": 10240,
+  "totalLineCount": 200000,
+  "processedLineCount": 48014,
+  "failedLineCount": 0,
+  "skippedLineCount": 0,
+  "lastCheckpointLine": 48000,
+  "lastCheckpointAt": "2025-12-29T10:05:00Z",
+  "processingStartedAt": "2025-12-29T10:00:00Z",
+  "processingCompletedAt": null,
+  "uploadedAt": "2025-12-29T10:00:00Z",
+  "retryCount": 0,
+  "errorMessage": null,
+  "storagePath": "cnab-20251229-100000-123.txt",
+  "progressPercentage": 24.01
+}
+```
+
+**Error Responses**:
+
+**404 Not Found**:
+```json
+{
+  "error": "Upload not found"
+}
+```
+
+**Example cURL**:
+```bash
+# Get specific upload details
+curl -X GET "http://localhost:5000/api/v1/transactions/uploads/550e8400-e29b-41d4-a716-446655440000" \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+**Use Cases**:
+- Monitor real-time processing progress
+- Check exact transaction count processed
+- Verify processing has completed
+- Resume from accurate checkpoint if needed
+
+---
+
 ### GET /transactions/uploads/incomplete
 
 List incomplete uploads that are stuck in `Processing` status.
@@ -1057,6 +1120,110 @@ Authorization: Bearer {accessToken}
 curl -X DELETE http://localhost:5000/api/v1/transactions \
   -H "Authorization: Bearer {accessToken}"
 ```
+
+---
+
+## Health Check Endpoints
+
+The API provides health check endpoints for monitoring application status and Kubernetes integration.
+
+### GET /health
+
+General application health status.
+
+**Endpoint**: `GET /api/v1/health`
+
+**Response** (200 OK):
+```
+Healthy
+```
+
+**Example cURL**:
+```bash
+curl http://localhost:5000/api/v1/health
+```
+
+---
+
+### GET /health/ready
+
+Kubernetes readiness probe - indicates if the application is ready to accept traffic.
+
+**Endpoint**: `GET /api/v1/health/ready`
+
+**Response** (200 OK):
+```json
+{
+  "status": "Healthy",
+  "checks": {
+    "Database": "Healthy",
+    "Redis": "Healthy"
+  }
+}
+```
+
+**Response** (503 Service Unavailable):
+Returns when critical dependencies are unavailable
+
+**Example cURL**:
+```bash
+curl http://localhost:5000/api/v1/health/ready
+```
+
+**Use Case**: Kubernetes uses this endpoint to determine if a pod should receive traffic.
+
+---
+
+### GET /health/live
+
+Kubernetes liveness probe - indicates if the application is alive and responsive.
+
+**Endpoint**: `GET /api/v1/health/live`
+
+**Response** (200 OK):
+```json
+{
+  "status": "Healthy"
+}
+```
+
+**Example cURL**:
+```bash
+curl http://localhost:5000/api/v1/health/live
+```
+
+**Use Case**: Kubernetes uses this endpoint to determine if a pod needs to be restarted.
+
+---
+
+### GET /metrics
+
+Prometheus metrics endpoint for monitoring and alerting.
+
+**Endpoint**: `GET /metrics`
+
+**Response** (200 OK):
+```
+# HELP http_requests_received_total Total number of HTTP requests received
+# TYPE http_requests_received_total counter
+http_requests_received_total{method="POST",endpoint="/api/v1/transactions/upload",status="202"} 42
+
+# HELP http_request_duration_seconds HTTP request duration in seconds
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{endpoint="/api/v1/transactions/upload",le="0.1"} 10
+...
+```
+
+**Example cURL**:
+```bash
+# Get all metrics
+curl http://localhost:5000/metrics
+
+# Filter specific metrics
+curl http://localhost:5000/metrics | grep "http_requests_received_total"
+```
+
+**Use Case**: Prometheus scrapes this endpoint every 15 seconds (default) to collect metrics for monitoring dashboards.
 
 ---
 

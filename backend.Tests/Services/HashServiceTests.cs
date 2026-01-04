@@ -289,14 +289,9 @@ public class HashServiceTests
 
     #region Helper Classes
 
-    private class NonSeekableStreamWrapper : Stream
+    private class NonSeekableStreamWrapper(Stream baseStream) : Stream
     {
-        private readonly Stream _baseStream;
-
-        public NonSeekableStreamWrapper(Stream baseStream)
-        {
-            _baseStream = baseStream;
-        }
+        private readonly Stream _baseStream = baseStream;
 
         public override bool CanSeek => false;
         public override bool CanRead => _baseStream.CanRead;

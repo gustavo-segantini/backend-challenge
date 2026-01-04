@@ -30,7 +30,7 @@ public interface IUploadManagementService
     /// <param name="timeoutMinutes">Maximum minutes an upload can be in Processing status before being considered stuck.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Response with incomplete uploads.</returns>
-    Task<IncompleteUploadsResponse> GetIncompleteUploadsAsync(
+    Task<Result<IncompleteUploadsResponse>> GetIncompleteUploadsAsync(
         int timeoutMinutes = 30,
         CancellationToken cancellationToken = default);
 
@@ -50,8 +50,18 @@ public interface IUploadManagementService
     /// <param name="timeoutMinutes">Maximum minutes an upload can be in Processing status before being considered stuck.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Response with summary of resumed uploads.</returns>
-    Task<ResumeAllUploadsResponse> ResumeAllIncompleteUploadsAsync(
+    Task<Result<ResumeAllUploadsResponse>> ResumeAllIncompleteUploadsAsync(
         int timeoutMinutes = 30,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a specific upload by ID with accurate transaction count from database.
+    /// </summary>
+    /// <param name="uploadId">The ID of the upload to retrieve.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Result with upload response or error.</returns>
+    Task<Result<FileUploadResponse>> GetUploadByIdAsync(
+        Guid uploadId,
         CancellationToken cancellationToken = default);
 }
 

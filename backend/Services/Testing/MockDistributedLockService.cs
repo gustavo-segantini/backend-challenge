@@ -8,15 +8,10 @@ namespace CnabApi.Services.Testing;
 /// Provides in-memory lock functionality without requiring Redis.
 /// </summary>
 [ExcludeFromCodeCoverage] // Testing infrastructure - not part of business logic
-public class MockDistributedLockService : IDistributedLockService
+public class MockDistributedLockService(ILogger<MockDistributedLockService> logger) : IDistributedLockService
 {
     private readonly Dictionary<string, string> _locks = [];
-    private readonly ILogger<MockDistributedLockService> _logger;
-
-    public MockDistributedLockService(ILogger<MockDistributedLockService> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<MockDistributedLockService> _logger = logger;
 
     public Task<bool> AcquireLockAsync(string key, string lockValue, int expirationSeconds = 300, CancellationToken cancellationToken = default)
     {

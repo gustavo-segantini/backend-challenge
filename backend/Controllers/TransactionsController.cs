@@ -152,6 +152,55 @@ public class TransactionsController(
     }
 
     /// <summary>
+    /// Gets a specific upload by ID with accurate transaction count from database.
+    /// This endpoint counts transactions directly from the database, providing accurate progress information.
+    /// Available to all authenticated users.
+    /// </summary>
+    /// <param name="uploadId">The ID of the upload to retrieve.</param>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
+    /// <returns>Upload information with accurate transaction count.</returns>
+    /// <remarks>
+    /// **Sample Request:**
+    /// ```
+    /// GET /api/v1/transactions/uploads/550e8400-e29b-41d4-a716-446655440000
+    /// Authorization: Bearer {token}
+    /// ```
+    /// 
+    /// **Sample Response (200):**
+    /// ```json
+    /// {
+    ///   "id": "550e8400-e29b-41d4-a716-446655440000",
+    ///   "fileName": "20251229143025",
+    ///   "status": "Processing",
+    ///   "fileSize": 10240,
+    ///   "totalLineCount": 200000,
+    ///   "processedLineCount": 48014,
+    ///   "failedLineCount": 0,
+    ///   "skippedLineCount": 0,
+    ///   "progressPercentage": 24.01
+    /// }
+    /// ```
+    /// </remarks>
+    [HttpGet("uploads/{uploadId}")]
+    [Authorize]
+    [ProducesResponseType(typeof(FileUploadResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUploadById(
+        [FromRoute] Guid uploadId,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _uploadManagementService.GetUploadByIdAsync(uploadId, cancellationToken);
+        
+        if (!result.IsSuccess)
+        {
+            return NotFound(new ErrorResponse(result.ErrorMessage ?? "Upload not found"));
+        }
+
+        return Ok(result.Data);
+    }
+
+    /// <summary>
     /// Lists incomplete uploads that are stuck in Processing status.
     /// Useful for detecting uploads that were interrupted and need to be resumed.
     /// Available to all authenticated users.
@@ -194,7 +243,13 @@ public class TransactionsController(
         CancellationToken cancellationToken = default)
     {
         var result = await _uploadManagementService.GetIncompleteUploadsAsync(timeoutMinutes, cancellationToken);
-        return Ok(result);
+
+        if (!result.IsSuccess)
+        {
+            return NotFound(new ErrorResponse(result.ErrorMessage ?? "No incomplete uploads found"));
+        }
+
+        return Ok(result.Data);
     }
 
     /// <summary>
@@ -289,7 +344,13 @@ public class TransactionsController(
         CancellationToken cancellationToken = default)
     {
         var result = await _uploadManagementService.ResumeAllIncompleteUploadsAsync(timeoutMinutes, cancellationToken);
-        return Ok(result);
+
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new ErrorResponse(result.ErrorMessage ?? "Failed to resume all incomplete uploads"));
+        }
+
+        return Ok(result.Data);
     }
 
     /// <summary>

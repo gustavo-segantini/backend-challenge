@@ -105,11 +105,15 @@ The system architecture is documented with interactive diagrams in [processing-f
    - Shows synchronous and asynchronous phases
    - Open in [app.diagrams.net](https://app.diagrams.net) for interactive viewing
 
+![flow-diagram](images/flow-diagram.png)
+
 2. **Detailed Processing Flow** - Complete 4-phase flow with all operations:
    - Phase 1: Upload & Validation (Synchronous)
    - Phase 2: Storage & Queue (Synchronous)
    - Phase 3: Background Processing (Asynchronous with parallel workers)
    - Phase 4: Automatic Recovery (Background service)
+
+![flow-processing-diagram](images/flow-processing-diagram.png)
 
 To view the diagrams:
 ```bash
@@ -517,18 +521,21 @@ This ensures coverage reflects only **testable business code**. Infrastructure c
 
 ### Upload Processing Modes
 
-The API supports two processing modes:
+The API supports two processing strategies (configurable via environment):
 
 1. **Asynchronous Processing (Production)**:
    - File is validated and stored immediately
    - Returns `202 Accepted` with upload ID
    - Processing happens in background via Redis queue
    - Monitor progress via `GET /api/v1/transactions/uploads/{uploadId}`
+   - **Environment**: All environments except `Test`
 
-2. **Synchronous Processing (Test Environment)**:
-   - File is processed immediately
+2. **Synchronous Processing (Test Environment Only)**:
+   - File is processed immediately during the request
    - Returns `200 OK` with transaction count
-   - Used for integration tests and load testing
+   - No Redis queue required
+   - **Environment**: Only when `ASPNETCORE_ENVIRONMENT=Test`
+   - **Use case**: Unit and integration tests requiring immediate results
 
 ## Environment Variables
 

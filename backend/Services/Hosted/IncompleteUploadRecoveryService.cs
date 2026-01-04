@@ -1,6 +1,8 @@
 using CnabApi.Models;
 using CnabApi.Services.Interfaces;
+using CnabApi.Utilities;
 using Microsoft.Extensions.Options;
+using Serilog.Context;
 using System.Diagnostics.CodeAnalysis;
 
 namespace CnabApi.Services.Hosted;
@@ -30,41 +32,45 @@ public class IncompleteUploadRecoveryService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation(
-            "Incomplete upload recovery service started. CheckInterval: {Interval} minutes, StuckTimeout: {Timeout} minutes",
-            RecoveryCheckIntervalMinutes, StuckUploadTimeoutMinutes);
-
-        // Wait a bit before first check to allow application to fully start
-        await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
-
-        while (!stoppingToken.IsCancellationRequested)
+        var correlationId = CorrelationIdHelper.GetOrCreateCorrelationId();
+        using (LogContext.PushProperty("CorrelationId", correlationId))
         {
-            try
+            logger.LogInformation(
+                "Incomplete upload recovery service started. CheckInterval: {Interval} minutes, StuckTimeout: {Timeout} minutes",
+                RecoveryCheckIntervalMinutes, StuckUploadTimeoutMinutes);
+
+            // Wait a bit before first check to allow application to fully start
+            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await RecoverIncompleteUploadsAsync(stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                logger.LogInformation("Incomplete upload recovery service cancellation requested");
-                break;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error in incomplete upload recovery service. Will retry on next interval.");
+                try
+                {
+                    await RecoverIncompleteUploadsAsync(stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    logger.LogInformation("Incomplete upload recovery service cancellation requested");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error in incomplete upload recovery service. Will retry on next interval.");
+                }
+
+                // Wait for the configured interval before next check
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(RecoveryCheckIntervalMinutes), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
 
-            // Wait for the configured interval before next check
-            try
-            {
-                await Task.Delay(TimeSpan.FromMinutes(RecoveryCheckIntervalMinutes), stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+            logger.LogInformation("Incomplete upload recovery service stopped");
         }
-
-        logger.LogInformation("Incomplete upload recovery service stopped");
     }
 
     /// <summary>
@@ -72,95 +78,102 @@ public class IncompleteUploadRecoveryService(
     /// </summary>
     private async Task RecoverIncompleteUploadsAsync(CancellationToken cancellationToken)
     {
-        logger.LogDebug("Checking for incomplete uploads...");
-
-        var incompleteUploads = await fileUploadTrackingService.FindIncompleteUploadsAsync(
-            StuckUploadTimeoutMinutes, 
-            cancellationToken);
-
-        if (incompleteUploads.Count == 0)
+        // Ensure CorrelationId is set for this operation
+        var correlationId = CorrelationIdHelper.GetOrCreateCorrelationId();
+        CorrelationIdHelper.SetCorrelationId(correlationId);
+        
+        using (LogContext.PushProperty("CorrelationId", correlationId))
         {
-            logger.LogDebug("No incomplete uploads found");
-            return;
-        }
+            logger.LogDebug("Checking for incomplete uploads...");
 
-        logger.LogInformation(
-            "Found {Count} incomplete upload(s) that need recovery",
-            incompleteUploads.Count);
+            var incompleteUploads = await fileUploadTrackingService.FindIncompleteUploadsAsync(
+                StuckUploadTimeoutMinutes, 
+                cancellationToken);
 
-        var recoveredCount = 0;
-        var errorCount = 0;
-
-        foreach (var upload in incompleteUploads)
-        {
-            try
+            if (incompleteUploads.Count == 0)
             {
-                // Skip if upload doesn't have storage path (cannot be recovered)
-                if (string.IsNullOrEmpty(upload.StoragePath))
-                {
-                    logger.LogWarning(
-                        "Cannot recover upload {UploadId}: missing storage path",
-                        upload.Id);
-                    errorCount++;
-                    continue;
-                }
+                logger.LogDebug("No incomplete uploads found");
+                return;
+            }
 
-                // Check if upload is currently being processed by another worker
-                var lockKey = $"upload:processing:{upload.Id}";
-                var isLocked = await lockService.LockExistsAsync(lockKey, cancellationToken);
+            logger.LogInformation(
+                "Found {Count} incomplete upload(s) that need recovery",
+                incompleteUploads.Count);
 
-                if (isLocked)
-                {
-                    logger.LogInformation(
-                        "Skipping upload {UploadId}: currently being processed by another worker (lock exists)",
-                        upload.Id);
-                    continue;
-                }
+            var recoveredCount = 0;
+            var errorCount = 0;
 
-                // Double-check: verify checkpoint hasn't been updated recently
-                // This handles race conditions where checkpoint was just saved
-                if (upload.LastCheckpointAt.HasValue)
+            foreach (var upload in incompleteUploads)
+            {
+                try
                 {
-                    var checkpointAge = DateTime.UtcNow - upload.LastCheckpointAt.Value;
-                    var checkpointTimeoutMinutes = StuckUploadTimeoutMinutes / 2; // More lenient for checkpoint check
-                    
-                    if (checkpointAge.TotalMinutes < checkpointTimeoutMinutes)
+                    // Skip if upload doesn't have storage path (cannot be recovered)
+                    if (string.IsNullOrEmpty(upload.StoragePath))
                     {
-                        logger.LogInformation(
-                            "Skipping upload {UploadId}: checkpoint was updated recently ({AgeMinutes:F1} minutes ago)",
-                            upload.Id, checkpointAge.TotalMinutes);
+                        logger.LogWarning(
+                            "Cannot recover upload {UploadId}: missing storage path",
+                            upload.Id);
+                        errorCount++;
                         continue;
                     }
+
+                    // Check if upload is currently being processed by another worker
+                    var lockKey = $"upload:processing:{upload.Id}";
+                    var isLocked = await lockService.LockExistsAsync(lockKey, cancellationToken);
+
+                    if (isLocked)
+                    {
+                        logger.LogInformation(
+                            "Skipping upload {UploadId}: currently being processed by another worker (lock exists)",
+                            upload.Id);
+                        continue;
+                    }
+
+                    // Double-check: verify checkpoint hasn't been updated recently
+                    // This handles race conditions where checkpoint was just saved
+                    if (upload.LastCheckpointAt.HasValue)
+                    {
+                        var checkpointAge = DateTime.UtcNow - upload.LastCheckpointAt.Value;
+                        var checkpointTimeoutMinutes = StuckUploadTimeoutMinutes / 2; // More lenient for checkpoint check
+                        
+                        if (checkpointAge.TotalMinutes < checkpointTimeoutMinutes)
+                        {
+                            logger.LogInformation(
+                                "Skipping upload {UploadId}: checkpoint was updated recently ({AgeMinutes:F1} minutes ago)",
+                                upload.Id, checkpointAge.TotalMinutes);
+                            continue;
+                        }
+                    }
+
+                    // Re-enqueue the upload for processing
+                    await uploadQueueService.EnqueueUploadAsync(upload.Id, upload.StoragePath, cancellationToken);
+
+                    recoveredCount++;
+
+                    logger.LogInformation(
+                        "Recovered incomplete upload. UploadId: {UploadId}, FileName: {FileName}, " +
+                        "WillResumeFromLine: {LastCheckpointLine}, Progress: {Processed}/{Total} lines",
+                        upload.Id,
+                        upload.FileName,
+                        upload.LastCheckpointLine,
+                        upload.ProcessedLineCount,
+                        upload.TotalLineCount);
                 }
-
-                // Re-enqueue the upload for processing
-                await uploadQueueService.EnqueueUploadAsync(upload.Id, upload.StoragePath, cancellationToken);
-
-                recoveredCount++;
-
-                logger.LogInformation(
-                    "Recovered incomplete upload. UploadId: {UploadId}, FileName: {FileName}, " +
-                    "WillResumeFromLine: {LastCheckpointLine}, Progress: {Processed}/{Total} lines",
-                    upload.Id,
-                    upload.FileName,
-                    upload.LastCheckpointLine,
-                    upload.ProcessedLineCount,
-                    upload.TotalLineCount);
+                catch (Exception ex)
+                {
+                    errorCount++;
+                    logger.LogError(ex,
+                        "Failed to recover upload {UploadId}: {Error}",
+                        upload.Id, ex.Message);
+                }
             }
-            catch (Exception ex)
+
+            if (recoveredCount > 0)
             {
-                errorCount++;
-                logger.LogError(ex,
-                    "Failed to recover upload {UploadId}: {Error}",
-                    upload.Id, ex.Message);
+                logger.LogInformation(
+                    "Recovery completed. Recovered: {Recovered}, Errors: {Errors}",
+                    recoveredCount, errorCount);
             }
-        }
-
-        if (recoveredCount > 0)
-        {
-            logger.LogInformation(
-                "Recovery completed. Recovered: {Recovered}, Errors: {Errors}",
-                recoveredCount, errorCount);
         }
     }
 

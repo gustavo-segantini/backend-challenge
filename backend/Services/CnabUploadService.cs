@@ -2,6 +2,7 @@ using CnabApi.Common;
 using CnabApi.Models;
 using CnabApi.Services.Interfaces;
 using CnabApi.Services.LineProcessing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
@@ -170,10 +171,23 @@ public class CnabUploadService(
                                         var uploadRecord = await checkpointFileUploadTrackingService.GetUploadByIdAsync(fileUploadId, cancellationToken);
                                         if (uploadRecord == null) return;
                                         
-                                        // Calculate totals: previous + incremental
-                                        var checkpointProcessed = uploadRecord.ProcessedLineCount + Interlocked.CompareExchange(ref processedCount, 0, 0);
-                                        var checkpointFailed = uploadRecord.FailedLineCount + Interlocked.CompareExchange(ref failedCount, 0, 0);
-                                        var checkpointSkipped = uploadRecord.SkippedLineCount + Interlocked.CompareExchange(ref skippedCount, 0, 0);
+                                        // IMPORTANT: Count actual transactions from database to get accurate totals
+                                        // This prevents accumulation errors when processing is resumed multiple times
+                                        // The count from database already includes all committed transactions from this session
+                                        using var dbContext = checkpointScope.ServiceProvider.GetRequiredService<Data.CnabDbContext>();
+                                        var actualProcessedCount = await dbContext.Transactions
+                                            .Where(t => t.FileUploadId == fileUploadId)
+                                            .CountAsync(cancellationToken);
+                                        
+                                        // Use actual count from database (already includes all committed transactions)
+                                        // For failed/skipped, we still need to use the incremental approach since
+                                        // these are tracked in FileUploadLineHashes, not Transactions table
+                                        var currentFailedIncrement = Interlocked.CompareExchange(ref failedCount, 0, 0);
+                                        var currentSkippedIncrement = Interlocked.CompareExchange(ref skippedCount, 0, 0);
+                                        
+                                        var checkpointProcessed = actualProcessedCount; // Use actual count from DB
+                                        var checkpointFailed = uploadRecord.FailedLineCount + currentFailedIncrement;
+                                        var checkpointSkipped = uploadRecord.SkippedLineCount + currentSkippedIncrement;
                                         
                                         // Save checkpoint with totals
                                         await checkpointManager.SaveCheckpointAsync(
@@ -250,18 +264,28 @@ public class CnabUploadService(
                 
                 if (hasUncommittedIncrements)
                 {
-                    // There are lines processed after the last checkpoint - add incremental counts
-                    var previousProcessed = uploadRecord.ProcessedLineCount;
+                    // IMPORTANT: Count actual transactions from database to get accurate totals
+                    // This prevents accumulation errors when processing is resumed multiple times
+                    // The count from database already includes all committed transactions from this session
+                    var actualProcessedCount = await finalScope.ServiceProvider
+                        .GetRequiredService<Data.CnabDbContext>()
+                        .Transactions
+                        .Where(t => t.FileUploadId == fileUploadId)
+                        .CountAsync(cancellationToken);
+                    
+                    // Use actual count from database (already includes all committed transactions)
+                    // For failed/skipped, we still need to use the incremental approach since
+                    // these are tracked in FileUploadLineHashes, not Transactions table
                     var previousFailed = uploadRecord.FailedLineCount;
                     var previousSkipped = uploadRecord.SkippedLineCount;
                     
-                    totalProcessed = previousProcessed + processedCount;
+                    totalProcessed = actualProcessedCount; // Use actual count from DB
                     totalFailed = previousFailed + failedCount;
                     totalSkipped = previousSkipped + skippedCount;
                     
                     logger.LogInformation(
-                        "Uncommitted increments found. UploadId: {UploadId}, LastCheckpointLine: {LastCheckpoint}, FinalMaxLine: {FinalMax}, Previous: Processed={PreviousProcessed}, Failed={PreviousFailed}, Skipped={PreviousSkipped}, Incremental: Processed={IncrementalProcessed}, Failed={IncrementalFailed}, Skipped={IncrementalSkipped}, Total: Processed={TotalProcessed}, Failed={TotalFailed}, Skipped={TotalSkipped}",
-                        fileUploadId, dbLastCheckpointLine, finalMaxLine, previousProcessed, previousFailed, previousSkipped, processedCount, failedCount, skippedCount, totalProcessed, totalFailed, totalSkipped);
+                        "Uncommitted increments found. UploadId: {UploadId}, LastCheckpointLine: {LastCheckpoint}, FinalMaxLine: {FinalMax}, ActualFromDB: Processed={ActualProcessed}, Previous: Failed={PreviousFailed}, Skipped={PreviousSkipped}, Incremental: Processed={IncrementalProcessed}, Failed={IncrementalFailed}, Skipped={IncrementalSkipped}, Total: Processed={TotalProcessed}, Failed={TotalFailed}, Skipped={TotalSkipped}",
+                        fileUploadId, dbLastCheckpointLine, finalMaxLine, actualProcessedCount, previousFailed, previousSkipped, processedCount, failedCount, skippedCount, totalProcessed, totalFailed, totalSkipped);
                 }
                 else
                 {
@@ -362,14 +386,9 @@ public class CnabUploadService(
     /// Thread-safe atomic integer wrapper for checkpoint line tracking.
     /// Simplifies checkpoint logic (KISS principle).
     /// </summary>
-    private class AtomicInt
+    private class AtomicInt(int initialValue)
     {
-        private int _value;
-
-        public AtomicInt(int initialValue)
-        {
-            _value = initialValue;
-        }
+        private int _value = initialValue;
 
         public int Value => Interlocked.CompareExchange(ref _value, 0, 0);
 

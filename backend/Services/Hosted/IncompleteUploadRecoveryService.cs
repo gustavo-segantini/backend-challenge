@@ -80,7 +80,6 @@ public class IncompleteUploadRecoveryService(
     {
         // Ensure CorrelationId is set for this operation
         var correlationId = CorrelationIdHelper.GetOrCreateCorrelationId();
-        CorrelationIdHelper.SetCorrelationId(correlationId);
         
         using (LogContext.PushProperty("CorrelationId", correlationId))
         {

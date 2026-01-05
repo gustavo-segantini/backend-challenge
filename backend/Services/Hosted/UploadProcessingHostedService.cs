@@ -94,8 +94,7 @@ public class UploadProcessingHostedService(
         var lockKey = $"upload:processing:{uploadId}";
         
         // Create a new CorrelationId for this upload processing operation
-        var correlationId = CorrelationIdHelper.GetOrCreateCorrelationId();
-        CorrelationIdHelper.SetCorrelationId(correlationId);
+        var correlationId = CorrelationIdHelper.GetOrCreateCorrelationId();        
         
         using (LogContext.PushProperty("CorrelationId", correlationId))
         {
